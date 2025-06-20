@@ -558,8 +558,8 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 		// SVG inline para el botón de cerrar
 		const closeSvgInline = `<svg class="close-svg" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
 
-		// SVG inline para el icono de guardar
-		const saveSvgInline = `<svg class="save-svg" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>`;
+		// SVG inline para el icono de guardar (color propio SVG)
+		const saveSvgBase64 = 'data:image/svg+xml;base64,PHN2ZyBpZD0iQ2FwYV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI0IDI0Ij4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogIzYyYTZmODsKICAgICAgfQogICAgPC9zdHlsZT4KICA8L2RlZnM+CiAgPGNpcmNsZSBjbGFzcz0ic3QwIiBjeD0iMTIiIGN5PSIxMiIgcj0iNiIvPgo8L3N2Zz4K';
 
 		let html = `<!DOCTYPE html>
 		<html lang="en">
@@ -843,7 +843,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 			${problemsText ? `<span class="problems">${problemsText}</span>` : ''}
 		</span>
 		<div class="tab-actions">
-			${isDirty ? `<div class="save-icon" title="Archivo con cambios sin guardar">${saveSvgInline}</div>` : ''}
+			${isDirty ? `<div class="save-icon" title="Archivo con cambios sin guardar"><img src="${saveSvgBase64}" style="width:18px;height:18px;display:block;"/></div>` : ''}
 			<span class="close" title="Cerrar pestaña">${closeSvgInline}</span>
 		</div>
 		<div class="drop-indicator"></div>

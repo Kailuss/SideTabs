@@ -2,8 +2,9 @@
 	"name": "sidetabs",
 	"displayName": "SideTabs",
 	"description": "Muestra las pestañas del editor verticalmente en el panel lateral",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"publisher": "Lovervoid",
+	"icon": "sidetabs.png",
 	"engines": {
 		"vscode": "^1.74.0"
 	},
