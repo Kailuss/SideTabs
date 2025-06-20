@@ -1,0 +1,106 @@
+{
+	"name": "sidetabs",
+	"displayName": "SideTabs",
+	"description": "Muestra las pestañas del editor verticalmente en el panel lateral",
+	"version": "0.3.0",
+	"publisher": "Lovervoid",
+	"engines": {
+		"vscode": "^1.74.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "sidetabs-explorer",
+					"title": "SideTabs",
+					"icon": "media/icon.svg"
+				}
+			]
+		},
+		"views": {
+			"sidetabs-explorer": [
+				{
+					"type": "webview",
+					"id": "sideTabsPanelView",
+					"name": "SideTabs",
+					"icon": "media/icon.svg"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "sideTabsPanelView",
+				"contents": "No open tabs.\nOpen a file to see it here."
+			}
+		],
+		"commands": [
+			{
+				"command": "sidetabs.closeTab",
+				"title": "SideTabs: Cerrar pestaña"
+			},
+			{
+				"command": "sidetabs.closeOtherTabs",
+				"title": "SideTabs: Cerrar otras pestañas"
+			},
+			{
+				"command": "sidetabs.closeAllTabs",
+				"title": "SideTabs: Cerrar todas las pestañas"
+			},
+			{
+				"command": "sidetabs.showTabMenu",
+				"title": "SideTabs: Mostrar menú de pestaña"
+			}
+		],
+		"configuration": {
+			"title": "SideTabs",
+			"properties": {
+				"sidetabs.fontSize": {
+					"type": "number",
+					"default": 14,
+					"minimum": 10,
+					"maximum": 24,
+					"description": "Tamaño de fuente para las pestañas (en píxeles)"
+				},
+				"sidetabs.tabHeight": {
+					"type": "number",
+					"default": 40,
+					"minimum": 30,
+					"maximum": 60,
+					"description": "Altura de las pestañas (en píxeles)"
+				},
+				"sidetabs.showDirectoryPath": {
+					"type": "boolean",
+					"default": true,
+					"description": "Mostrar el directorio del archivo junto al nombre"
+				}
+			}
+		}
+	},
+	"activationEvents": [
+		"onStartupFinished",
+		"onView:sideTabsPanelView"
+	],
+	"main": "./out/extension.js",
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"lint": "eslint src --ext ts"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.74.0",
+		"@types/node": "20.2.5",
+		"@typescript-eslint/eslint-plugin": "^5.59.8",
+		"@typescript-eslint/parser": "^5.59.8",
+		"eslint": "^8.41.0",
+		"typescript": "^5.1.3",
+		"@vscode/test-electron": "^2.3.2"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kailuss/sidetabs"
+	}
+}
