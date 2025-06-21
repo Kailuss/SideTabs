@@ -2,6 +2,93 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Nueva clase para gestionar la localización
+class Localization {
+	private static _instance: Localization;
+	private _strings: { [key: string]: string } = {};
+
+	private constructor() {
+		// Cargamos el idioma de VS Code
+		this.loadCurrentLanguage();
+	}
+
+	public static getInstance(): Localization {
+		if (!Localization._instance) {
+			Localization._instance = new Localization();
+		}
+		return Localization._instance;
+	}
+
+	private loadCurrentLanguage(): void {
+		try {
+			// Obtener configuración de idioma de VS Code
+			const vscodeLanguage = vscode.env.language || 'en';
+
+			// Definir strings básicos en inglés (por defecto)
+			this._strings = {
+				// QuickPick ítems
+				'close': 'Close',
+				'closeDescription': 'Close this tab',
+				'closeOther': 'Close others',
+				'closeOtherDescription': 'Close all tabs except this one',
+				'closeAll': 'Close all',
+				'closeAllDescription': 'Close all tabs',
+				'separator': 'Separator',
+				'splitEditor': 'Split editor',
+				'splitEditorDescription': 'Split the editor with this tab',
+				'copyPath': 'Copy path',
+				'copyPathDescription': 'Copy file path to clipboard',
+				'quickPickPlaceholder': 'Actions for {0}',
+
+				// Messages
+				'pathCopied': 'Path copied to clipboard',
+				'errorLoadingView': 'Error loading SideTabs',
+				'unsavedChanges': 'Unsaved changes',
+				'closeTab': 'Close tab'
+			};
+
+			// Cargar strings en español si es el idioma actual
+			if (vscodeLanguage.startsWith('es')) {
+				this._strings = {
+					// QuickPick ítems
+					'close': 'Cerrar',
+					'closeDescription': 'Cierra esta pestaña',
+					'closeOther': 'Cerrar otras',
+					'closeOtherDescription': 'Cierra todas las pestañas menos esta',
+					'closeAll': 'Cerrar todas',
+					'closeAllDescription': 'Cierra todas las pestañas',
+					'separator': 'Separador',
+					'splitEditor': 'Dividir editor',
+					'splitEditorDescription': 'Divide el editor con esta pestaña',
+					'copyPath': 'Copiar ruta',
+					'copyPathDescription': 'Copia la ruta del archivo al portapapeles',
+					'quickPickPlaceholder': 'Acciones para {0}',
+					// Messages
+					'pathCopied': 'Ruta copiada al portapapeles',
+					'errorLoadingView': 'Error al cargar SideTabs',
+					'unsavedChanges': 'Archivo con cambios sin guardar',
+					'closeTab': 'Cerrar pestaña'
+				};
+			}
+		} catch (error) {
+			console.error('[SideTabs] Error loading localization:', error);
+		}
+	}
+
+	public getLocaleString(key: string, ...args: any[]): string {
+		let text = this._strings[key] || key;
+
+		// Reemplazar parámetros si se proporcionan
+		if (args && args.length > 0) {
+			args.forEach((arg, index) => {
+				text = text.replace(`{${index}}`, arg);
+			});
+		}
+
+		return text;
+	}
+}
+
 class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'sideTabsPanelView';
 	private customOrder: string[] = []; // Orden personalizado de las pestañas
@@ -19,26 +106,32 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 		if (tab.input instanceof vscode.TabInputText) {
 			await vscode.window.showTextDocument(tab.input.uri);
 		}
+
+		// Obtenemos las traducciones
+		const localize = Localization.getInstance().getLocaleString;
+
 		// Mostrar QuickPick con opciones
 		const items: vscode.QuickPickItem[] = [
-			{ label: "Cerrar", description: "Cierra esta pestaña" },
-			{ label: "Cerrar otras", description: "Cierra todas las pestañas menos esta" },
-			{ label: "Cerrar todas", description: "Cierra todas las pestañas" },
-			{ label: "Separador", kind: vscode.QuickPickItemKind.Separator },
-			{ label: "Dividir editor", description: "Divide el editor con esta pestaña" },
-			{ label: "Copiar ruta", description: "Copia la ruta del archivo al portapapeles" }
+			{ label: localize('close'), description: localize('closeDescription') },
+			{ label: localize('closeOther'), description: localize('closeOtherDescription') },
+			{ label: localize('closeAll'), description: localize('closeAllDescription') },
+			{ label: localize('separator'), kind: vscode.QuickPickItemKind.Separator },
+			{ label: localize('splitEditor'), description: localize('splitEditorDescription') },
+			{ label: localize('copyPath'), description: localize('copyPathDescription') }
 		];
 
 		const selected = await vscode.window.showQuickPick(items, {
-			placeHolder: `Acciones para ${tab.label}`
+			placeHolder: localize('quickPickPlaceholder', tab.label)
 		});
 
 		if (selected) {
+			const localize = Localization.getInstance().getLocaleString;
+
 			switch (selected.label) {
-				case "Cerrar":
+				case localize('close'):
 					await vscode.window.tabGroups.close(tab);
 					break;
-				case "Cerrar otras":
+				case localize('closeOther'):
 					for (const group of vscode.window.tabGroups.all) {
 						for (const t of group.tabs) {
 							if (t !== tab) {
@@ -47,20 +140,20 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 						}
 					}
 					break;
-				case "Cerrar todas":
+				case localize('closeAll'):
 					for (const group of vscode.window.tabGroups.all) {
 						for (const t of group.tabs) {
 							await vscode.window.tabGroups.close(t);
 						}
 					}
 					break;
-				case "Dividir editor":
+				case localize('splitEditor'):
 					await vscode.commands.executeCommand('workbench.action.splitEditor');
 					break;
-				case "Copiar ruta":
+				case localize('copyPath'):
 					if (tab.input instanceof vscode.TabInputText) {
 						await vscode.env.clipboard.writeText(tab.input.uri.fsPath);
-						vscode.window.showInformationMessage('Ruta copiada al portapapeles');
+						vscode.window.showInformationMessage(localize('pathCopied'));
 					}
 					break;
 			}
@@ -135,7 +228,8 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 				}
 			} catch (error) {
 				console.error('[SideTabs] Error al actualizar la vista:', error);
-				webviewView.webview.html = `<html><body><h3>Error al cargar SideTabs</h3><p>${error}</p></body></html>`;
+				const localize = Localization.getInstance().getLocaleString;
+				webviewView.webview.html = `<html><body><h3>${localize('errorLoadingView')}</h3><p>${error}</p></body></html>`;
 			}
 		};
 		// Función para reintentar tras 1 segundo solo al cargar el panel
@@ -312,9 +406,13 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	private _iconThemeId: string | null = null;
 	private _iconThemePath: string | null = null;
 	private _iconThemeJson: any = null;
-	private _iconCache: Map<string, string> = new Map(); // Caché de iconos por filename+languageId
+	private _iconCache: Map<string, string> = new Map();
 
-	// Precarga los iconos para todos los archivos abiertos (ahora público)
+	// Método para obtener texto localizado
+	private getLocalizedText(key: string, fallback: string): string {
+		return Localization.getInstance().getLocaleString(key) || fallback;
+	}
+
 	public async preloadAllIcons(tabs: vscode.Tab[], context: vscode.ExtensionContext): Promise<void> {
 		for (const tab of tabs) {
 			if (tab.input instanceof vscode.TabInputText) {
@@ -504,6 +602,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	public async getHtml(webview: vscode.Webview): Promise<string> {
 		const tabGroups = vscode.window.tabGroups.all;
 		const context = this._context!;
+		const localize = Localization.getInstance().getLocaleString;
 
 		// Obtener configuraciones
 		const config = vscode.workspace.getConfiguration('sidetabs');
@@ -839,12 +938,12 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 		${iconHtml}
 		<span class="${labelClass}">
 			${label}
-			${showDirectoryPath && directoryPath ? `<span class="directory"> • ${directoryPath}</span>` : ''}
 			${problemsText ? `<span class="problems">${problemsText}</span>` : ''}
+			${showDirectoryPath && directoryPath ? `<span class="directory"> • ${directoryPath}</span>` : ''}
 		</span>
 		<div class="tab-actions">
-			${isDirty ? `<div class="save-icon" title="Archivo con cambios sin guardar"><img src="${saveSvgBase64}" style="width:18px;height:18px;display:block;"/></div>` : ''}
-			<span class="close" title="Cerrar pestaña">${closeSvgInline}</span>
+			${isDirty ? `<div class="save-icon" title="${this.getLocalizedText('unsavedChanges', 'Archivo con cambios sin guardar')}"><img src="${saveSvgBase64}" style="width:18px;height:18px;display:block;"/></div>` : ''}
+			<span class="close" title="${this.getLocalizedText('closeTab', 'Cerrar pestaña')}">${closeSvgInline}</span>
 		</div>
 		<div class="drop-indicator"></div>
 	</div>`;

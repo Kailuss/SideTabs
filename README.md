@@ -24,6 +24,7 @@ SideTabs is a Visual Studio Code extension that displays your editor tabs vertic
   - Adjustable font size
   - Optional directory path display
 - **Theme Integration**: Automatically adopts your VS Code color theme
+- **Multilingual Support**: Available in English and Spanish
 
 ## Installation
 
@@ -79,7 +80,7 @@ SideTabs is a Visual Studio Code extension that displays your editor tabs vertic
 - Persist custom tab order between sessions
 - GitHub Copilot integration
 - Tab filtering and search
-- Translation into multiple languages
+- Translation into additional languages
 - Improved initial load speed
 - Improved context menu
 - Add different views depending on whether it's in the right or left sidebar

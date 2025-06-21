@@ -1,14 +1,15 @@
 {
 	"name": "sidetabs",
 	"displayName": "SideTabs",
-	"description": "Muestra las pestañas del editor verticalmente en el panel lateral",
-	"version": "0.3.1",
+	"description": "%sidetabs.description%",
+	"version": "0.3.2",
 	"publisher": "Lovervoid",
 	"icon": "sidetabs.png",
 	"engines": {
 		"vscode": "^1.74.0"
 	},
 	"categories": [
+		"Visualization",
 		"Other"
 	],
 	"contributes": {
@@ -16,7 +17,7 @@
 			"activitybar": [
 				{
 					"id": "sidetabs-explorer",
-					"title": "SideTabs",
+					"title": "%sidetabs.viewContainers.title%",
 					"icon": "media/icon.svg"
 				}
 			]
@@ -26,7 +27,7 @@
 				{
 					"type": "webview",
 					"id": "sideTabsPanelView",
-					"name": "SideTabs",
+					"name": "%sidetabs.views.name%",
 					"icon": "media/icon.svg"
 				}
 			]
@@ -34,48 +35,48 @@
 		"viewsWelcome": [
 			{
 				"view": "sideTabsPanelView",
-				"contents": "No open tabs.\nOpen a file to see it here."
+				"contents": "%sidetabs.viewsWelcome.contents%"
 			}
 		],
 		"commands": [
 			{
 				"command": "sidetabs.closeTab",
-				"title": "SideTabs: Cerrar pestaña"
+				"title": "%sidetabs.command.closeTab.title%"
 			},
 			{
 				"command": "sidetabs.closeOtherTabs",
-				"title": "SideTabs: Cerrar otras pestañas"
+				"title": "%sidetabs.command.closeOtherTabs.title%"
 			},
 			{
 				"command": "sidetabs.closeAllTabs",
-				"title": "SideTabs: Cerrar todas las pestañas"
+				"title": "%sidetabs.command.closeAllTabs.title%"
 			},
 			{
 				"command": "sidetabs.showTabMenu",
-				"title": "SideTabs: Mostrar menú de pestaña"
+				"title": "%sidetabs.command.showTabMenu.title%"
 			}
 		],
 		"configuration": {
-			"title": "SideTabs",
+			"title": "%sidetabs.config.title%",
 			"properties": {
 				"sidetabs.fontSize": {
 					"type": "number",
 					"default": 14,
 					"minimum": 10,
 					"maximum": 24,
-					"description": "Tamaño de fuente para las pestañas (en píxeles)"
+					"description": "%sidetabs.config.fontSize.description%"
 				},
 				"sidetabs.tabHeight": {
 					"type": "number",
 					"default": 40,
 					"minimum": 30,
 					"maximum": 60,
-					"description": "Altura de las pestañas (en píxeles)"
+					"description": "%sidetabs.config.tabHeight.description%"
 				},
 				"sidetabs.showDirectoryPath": {
 					"type": "boolean",
 					"default": true,
-					"description": "Mostrar el directorio del archivo junto al nombre"
+					"description": "%sidetabs.config.showDirectoryPath.description%"
 				}
 			}
 		}
