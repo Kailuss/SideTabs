@@ -711,6 +711,44 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 			<meta charset="UTF-8">
 			<title>Side Tabs Panel</title>
 			<style>
+			/* Estilos para tooltips personalizados con el estilo de VS Code */
+			.vscode-tooltip {
+			  background-color: var(--vscode-editorHoverWidget-background, #252526);
+			  color: var(--vscode-editorHoverWidget-foreground, #cccccc);
+			  border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+			  border-radius: 4px;
+			  padding: 6px 8px;
+			  font-size: 12px;
+			  max-width: 300px;
+			  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+			  z-index: 1000;
+			  white-space: normal;
+			  line-height: 1.4;
+			  position: fixed;
+			  pointer-events: none;
+			  opacity: 0;
+			  visibility: hidden;
+			  transition: opacity 0.15s ease-out, transform 0.15s ease-out, visibility 0.15s;
+			  transform: translateY(4px);
+			  font-family: var(--vscode-font-family);
+			  overflow-wrap: break-word;
+			  word-break: normal;
+			}
+			.vscode-tooltip.visible {
+			  opacity: 1;
+			  visibility: visible;
+			  transform: translateY(0);
+			}
+			
+			/* Hacer los elementos con tooltips más interactivos */
+			[data-tooltip-content] {
+			  position: relative;
+			}
+			
+			/* Ocultar tooltips nativos del navegador */
+			[data-tooltip-content]:hover::after {
+			  content: none !important;
+			}
 			.file-icon { 
 				display: inline-block; 
 				vertical-align: middle; 
@@ -974,9 +1012,10 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 				labelClass = 'label faded';
 			}
 
+			// Usar data-tooltip-content en lugar de title para nuestros tooltips personalizados
 			html += `<div class="tab${isActive ? ' active' : ''}"
 			data-label="${label}"
-			title="${directoryPath ? `${directoryPath}\\${label}` : label}"
+			data-tooltip-content="${directoryPath ? `${directoryPath}\\${label}` : label}"
 			draggable="true">
 		<div class="click-layer"></div>
 		${iconHtml}
@@ -986,8 +1025,8 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 			${showDirectoryPath && directoryPath ? `<span class="directory"> • ${directoryPath}</span>` : ''}
 		</span>
 		<div class="tab-actions">
-			${isDirty ? `<div class="save-icon" title="${this.getLocalizedText('unsavedChanges', 'Archivo con cambios sin guardar')}"><img src="${saveSvgBase64}" style="width:18px;height:18px;display:block;"/></div>` : ''}
-			<span class="close" title="${this.getLocalizedText('closeTab', 'Cerrar pestaña')}">${closeSvgInline}</span>
+			${isDirty ? `<div class="save-icon" data-tooltip-content="${this.getLocalizedText('unsavedChanges', 'Archivo con cambios sin guardar')}"><img src="${saveSvgBase64}" style="width:18px;height:18px;display:block;"/></div>` : ''}
+			<span class="close" data-tooltip-content="${this.getLocalizedText('closeTab', 'Cerrar pestaña')}">${closeSvgInline}</span>
 		</div>
 		<div class="drop-indicator"></div>
 	</div>`;
@@ -998,6 +1037,109 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	let draggedTab = null;
 	let allTabs = Array.from(document.querySelectorAll('.tab'));
 	const tabContainer = document.body; // Usar body como contenedor
+	let tooltipTimeout = null;
+	let activeTooltip = null;
+
+	// Crear el elemento tooltip que se reutilizará
+	function createTooltip() {
+		if (document.querySelector('.vscode-tooltip')) {
+			return document.querySelector('.vscode-tooltip');
+		}
+		const tooltip = document.createElement('div');
+		tooltip.className = 'vscode-tooltip';
+		document.body.appendChild(tooltip);
+		return tooltip;
+	}
+
+	// Mostrar tooltip en posición específica
+	function showTooltip(element, content) {
+		// Cancelar cualquier tooltip pendiente
+		if (tooltipTimeout) {
+			clearTimeout(tooltipTimeout);
+		}
+		
+		// Crear o reutilizar el elemento tooltip
+		const tooltip = createTooltip();
+		activeTooltip = tooltip;
+		
+		// Actualizar contenido
+		tooltip.textContent = content;
+		
+		// Posicionar el tooltip
+		tooltipTimeout = setTimeout(() => {
+			const rect = element.getBoundingClientRect();
+			
+			// Posicionar encima o debajo dependiendo del espacio disponible
+			const spaceBelow = window.innerHeight - rect.bottom;
+			const spaceAbove = rect.top;
+			
+			const tooltipHeight = tooltip.offsetHeight;
+			
+			let top, left;
+			
+			if (spaceBelow >= tooltipHeight || spaceBelow >= spaceAbove) {
+				// Mostrar debajo
+				top = rect.bottom + 5;
+			} else {
+				// Mostrar arriba
+				top = rect.top - tooltipHeight - 5;
+			}
+			
+			// Centrar horizontalmente
+			left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2);
+			
+			// Asegurar que no se salga de la ventana
+			if (left < 5) left = 5;
+			if (left + tooltip.offsetWidth > window.innerWidth - 5) {
+				left = window.innerWidth - tooltip.offsetWidth - 5;
+			}
+			
+			tooltip.style.top = top + 'px';
+			tooltip.style.left = left + 'px';
+			tooltip.classList.add('visible');
+		}, 300); // Pequeño retraso para evitar tooltips al pasar el cursor rápidamente
+	}
+
+	// Ocultar tooltip
+	function hideTooltip() {
+		if (tooltipTimeout) {
+			clearTimeout(tooltipTimeout);
+			tooltipTimeout = null;
+		}
+		
+		if (activeTooltip) {
+			activeTooltip.classList.remove('visible');
+		}
+	}
+
+	// Aplicar tooltips a todos los elementos con data-tooltip-content
+	document.addEventListener('mouseover', e => {
+		const tooltipTarget = e.target.closest('[data-tooltip-content]');
+		if (tooltipTarget) {
+			const content = tooltipTarget.getAttribute('data-tooltip-content');
+			showTooltip(tooltipTarget, content);
+		}
+	});
+
+	document.addEventListener('mouseout', e => {
+		const tooltipTarget = e.target.closest('[data-tooltip-content]');
+		if (tooltipTarget) {
+			hideTooltip();
+		}
+	});
+	
+	// Actualizar posición del tooltip cuando se desplace la página
+	document.addEventListener('scroll', () => {
+		if (activeTooltip && activeTooltip.classList.contains('visible')) {
+			// Simplemente ocultamos el tooltip al desplazarnos
+			hideTooltip();
+		}
+	}, true);
+
+	// Cerrar tooltips al hacer clic en cualquier parte
+	document.addEventListener('click', () => {
+		hideTooltip();
+	});
 
 	// Dragover global para evitar icono prohibido y parpadeo
 	document.addEventListener('dragover', e => {
@@ -1030,6 +1172,9 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	// Asignar eventos drag & drop a cada tab
 	allTabs.forEach(tab => {
 		tab.addEventListener('dragstart', e => {
+			// Ocultar tooltips cuando comience el arrastre
+			hideTooltip();
+			
 			draggedTab = tab;
 			tab.classList.add('dragging');
 			e.dataTransfer.effectAllowed = 'move';
@@ -1058,6 +1203,9 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 
 		// Click events para abrir/cerrar pestañas
 		tab.addEventListener('click', e => {
+			// Ocultar tooltips al hacer clic
+			hideTooltip();
+			
 			e.stopPropagation();
 			const closeBtn = e.target.closest('.close');
 			if (closeBtn) {
@@ -1069,6 +1217,9 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 		
 		// Menú contextual para las pestañas
 		tab.addEventListener('contextmenu', e => {
+			// Ocultar tooltips al mostrar el menú contextual
+			hideTooltip();
+			
 			e.preventDefault();
 			e.stopPropagation();
 			
