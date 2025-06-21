@@ -163,6 +163,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	resolveWebviewView(webviewView: vscode.WebviewView) {
 		console.log('[SideTabs] resolveWebviewView INVOCADO');
 		this._view = webviewView; // Guardar referencia a la vista
+
 		// Asegurarse de incluir la carpeta de iconos explícitamente
 		const iconsDir = vscode.Uri.joinPath(this._context!.globalStorageUri, 'icons');
 		webviewView.webview.options = {
@@ -186,62 +187,32 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 			configListener.dispose();
 		});
 
-		const update = async () => {
+		// Definimos el mapa de iconos una sola vez durante la inicialización
+		this.buildIconMap(this._context!).catch(err => {
+			console.error('[SideTabs] Error al construir mapa de iconos:', err);
+		});
+
+		const update = async (forceIconRefresh: boolean = false) => {
 			try {
-				// Precargar iconos antes de renderizar el HTML
-				const tabGroups = vscode.window.tabGroups.all;
-				const allTabsFlat: vscode.Tab[] = [];
-				for (const group of tabGroups) {
-					for (const tab of group.tabs) {
-						allTabsFlat.push(tab);
-					}
-				}
-				let needsRetry = false;
-				for (const tab of allTabsFlat) {
-					if (tab.input instanceof vscode.TabInputText) {
-						const input = tab.input as vscode.TabInputText;
-						const fileName = input.uri.path.split('/').pop() || '';
-						let doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === input.uri.toString());
-						let languageId = doc?.languageId;
-						// Si no hay languageId, intentar abrir el documento en background SOLO si el archivo existe
-						if (!languageId && input.uri.scheme === 'file' && fs.existsSync(input.uri.fsPath)) {
-							try {
-								doc = await vscode.workspace.openTextDocument(input.uri);
-								languageId = doc.languageId;
-							} catch (e) {
-								needsRetry = true;
-							}
-						}
-						const cacheKey = `${fileName}|${languageId || ''}`;
-						if (!this._iconCache.has(cacheKey)) {
-							const iconBase64 = await this.getFileIconAsBase64(fileName, this._context!, languageId);
-							if (iconBase64) {
-								this._iconCache.set(cacheKey, iconBase64);
-							}
-						}
-					}
-				}
+				// OPTIMIZACIÓN: Renderizar primero la interfaz sin esperar a cargar todos los iconos
 				webviewView.webview.html = await this.getHtml(webviewView.webview);
-				// Si algún languageId no estaba disponible, reintentar tras 500ms
-				if (needsRetry) {
-					setTimeout(() => { update(); }, 500);
-				}
+
+				// Luego, precargamos los iconos en segundo plano
+				this.preloadIconsInBackground(forceIconRefresh);
 			} catch (error) {
 				console.error('[SideTabs] Error al actualizar la vista:', error);
 				const localize = Localization.getInstance().getLocaleString;
 				webviewView.webview.html = `<html><body><h3>${localize('errorLoadingView')}</h3><p>${error}</p></body></html>`;
 			}
 		};
-		// Función para reintentar tras 1 segundo solo al cargar el panel
-		const updateWithRetry = async () => {
-			await update();
-			setTimeout(() => { update(); }, 1000);
-		};
-		updateWithRetry();
-		vscode.window.tabGroups.onDidChangeTabs(update, this);
-		vscode.window.tabGroups.onDidChangeTabGroups(update, this);
-		vscode.languages.onDidChangeDiagnostics(update, this);
-		// Nuevo: actualizar cuando se abre un documento
+
+		// Primera actualización sin reintento
+		update(true);
+
+		// Configurar listeners para actualizar la vista
+		vscode.window.tabGroups.onDidChangeTabs(() => update(), this);
+		vscode.window.tabGroups.onDidChangeTabGroups(() => update(), this);
+		vscode.languages.onDidChangeDiagnostics(() => update(), this);
 		vscode.workspace.onDidOpenTextDocument(() => update(), this);
 		webviewView.webview.onDidReceiveMessage(async message => {
 			const tabGroups = vscode.window.tabGroups.all;
@@ -402,176 +373,250 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	// Mapeo global de iconos por extensión, nombre y languageId
-	private _iconMap: Record<string, string> | null = null;
-	private _iconThemeId: string | null = null;
-	private _iconThemePath: string | null = null;
-	private _iconThemeJson: any = null;
 	private _iconCache: Map<string, string> = new Map();
+	private _iconMap: Record<string, string> | undefined;
+	private _iconThemeId: string | undefined;
+	private _iconThemePath: string | undefined;
+	private _iconThemeJson: any;
+	private _isPreloadingIcons: boolean = false;
 
 	// Método para obtener texto localizado
 	private getLocalizedText(key: string, fallback: string): string {
 		return Localization.getInstance().getLocaleString(key) || fallback;
 	}
 
-	public async preloadAllIcons(tabs: vscode.Tab[], context: vscode.ExtensionContext): Promise<void> {
-		for (const tab of tabs) {
-			if (tab.input instanceof vscode.TabInputText) {
-				const input = tab.input as vscode.TabInputText;
-				const fileName = input.uri.path.split('/').pop() || '';
-				let doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === input.uri.toString());
-				let languageId = doc?.languageId;
-				if (!languageId) {
-					const ext = fileName.split('.').pop()?.toLowerCase();
-					if (ext) {
-						const conf = vscode.workspace.getConfiguration('files.associations');
-						if (conf && conf[`.${ext}`]) {
-							languageId = conf[`.${ext}`];
-						}
-					}
-				}
-				// Precarga usando la misma lógica de caché que el render
-				await this.getIconForFile(fileName, context, languageId);
-			}
-		}
-	}
+	// Método para precargar iconos en segundo plano sin bloquear la UI
+	public async preloadIconsInBackground(forceRefresh: boolean = false): Promise<void> {
+		// Evitar precarga simultánea
+		if (this._isPreloadingIcons && !forceRefresh) return;
 
-	// Obtiene un icono de la caché o lo carga si no existe
-	private async getIconForFile(fileName: string, context: vscode.ExtensionContext, languageId?: string): Promise<string | undefined> {
-		// Primero intentamos por nombre
-		let cacheKey = `name:${fileName.toLowerCase()}`;
-		if (this._iconCache.has(cacheKey)) {
-			return this._iconCache.get(cacheKey);
-		}
-		// Luego por extensión
-		const ext = fileName.split('.').pop()?.toLowerCase() || '';
-		cacheKey = `ext:${ext}`;
-		if (this._iconCache.has(cacheKey)) {
-			return this._iconCache.get(cacheKey);
-		}
-		// Luego por languageId si está definido
-		if (languageId) {
-			cacheKey = `lang:${languageId.toLowerCase()}`;
-			if (this._iconCache.has(cacheKey)) {
-				return this._iconCache.get(cacheKey);
+		this._isPreloadingIcons = true;
+		try {
+			const tabGroups = vscode.window.tabGroups.all;
+			const allTabsFlat: vscode.Tab[] = [];
+
+			for (const group of tabGroups) {
+				for (const tab of group.tabs) {
+					allTabsFlat.push(tab);
+				}
 			}
-		}
-		// Si no está en caché, lo buscamos y lo guardamos con la clave adecuada
-		const iconBase64 = await this.getFileIconAsBase64(fileName, context, languageId);
-		if (iconBase64) {
-			// Guardar en caché por el primer criterio que se resuelva
-			if (this._iconMap && this._iconMap[`name:${fileName.toLowerCase()}`]) {
-				this._iconCache.set(`name:${fileName.toLowerCase()}`, iconBase64);
-			} else if (this._iconMap && this._iconMap[`ext:${ext}`]) {
-				this._iconCache.set(`ext:${ext}`, iconBase64);
-			} else if (languageId && this._iconMap && this._iconMap[`lang:${languageId.toLowerCase()}`]) {
-				this._iconCache.set(`lang:${languageId.toLowerCase()}`, iconBase64);
-			} else {
-				this._iconCache.set(`default`, iconBase64);
+
+			// Proceso en segundo plano con promesas en paralelo para optimizar la carga
+			const iconPromises: Promise<void>[] = [];
+
+			for (const tab of allTabsFlat) {
+				if (tab.input instanceof vscode.TabInputText) {
+					const input = tab.input as vscode.TabInputText;
+					const fileName = input.uri.path.split('/').pop() || '';
+					let languageId: string | undefined = undefined;
+
+					// Intentar obtener languageId de documentos ya abiertos
+					const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === input.uri.toString());
+					if (doc) {
+						languageId = doc.languageId;
+					}
+
+					// Si no hay un documento abierto y el archivo existe, cargarlo de forma asíncrona
+					const loadIconPromise = async () => {
+						try {
+							if (!languageId && input.uri.scheme === 'file' && fs.existsSync(input.uri.fsPath)) {
+								try {
+									const doc = await vscode.workspace.openTextDocument(input.uri);
+									languageId = doc.languageId;
+								} catch (e) {
+									// Ignorar errores, usaremos sólo el nombre del archivo
+								}
+							}
+
+							const cacheKey = `${fileName}|${languageId || ''}`;
+							if (!this._iconCache.has(cacheKey) || forceRefresh) {
+								const iconBase64 = await this.getFileIconAsBase64(fileName, this._context!, languageId);
+								if (iconBase64) {
+									this._iconCache.set(cacheKey, iconBase64);
+								}
+							}
+						} catch (error) {
+							console.error(`[SideTabs] Error al precargar icono para ${fileName}:`, error);
+						}
+					};
+
+					iconPromises.push(loadIconPromise());
+				}
 			}
+
+			// Ejecutar todas las promesas en paralelo pero limitando la concurrencia
+			// para no sobrecargar el sistema
+			const batchSize = 5;
+			for (let i = 0; i < iconPromises.length; i += batchSize) {
+				const batch = iconPromises.slice(i, i + batchSize);
+				await Promise.all(batch);
+			}
+
+			// Una vez que se han cargado los iconos, actualizar la vista si aún existe
+			if (this._view) {
+				this._view.webview.html = await this.getHtml(this._view.webview);
+			}
+		} finally {
+			this._isPreloadingIcons = false;
 		}
-		return iconBase64;
 	}
 
 	private async buildIconMap(context: vscode.ExtensionContext): Promise<void> {
-		const config = vscode.workspace.getConfiguration();
-		const iconTheme = config.get<string>('workbench.iconTheme');
-		if (!iconTheme) return;
-		if (this._iconThemeId === iconTheme && this._iconMap) return; // Ya está construido
+		try {
+			const config = vscode.workspace.getConfiguration();
+			const iconTheme = config.get<string>('workbench.iconTheme');
 
-		const ext = vscode.extensions.all.find(e =>
-			e.packageJSON.contributes?.iconThemes?.some((t: any) => t.id === iconTheme)
-		);
-		if (!ext) return;
-		const themeContribution = ext.packageJSON.contributes.iconThemes.find((t: any) => t.id === iconTheme);
-		if (!themeContribution) return;
-		const themePath = path.join(ext.extensionPath, themeContribution.path);
-		if (!fs.existsSync(themePath)) return;
-		const themeJson = JSON.parse(fs.readFileSync(themePath, 'utf8'));
+			// Si no hay tema de iconos, no hacemos nada
+			if (!iconTheme) return;
 
-		this._iconThemeId = iconTheme;
-		this._iconThemePath = themePath;
-		this._iconThemeJson = themeJson;
-		const iconMap: Record<string, string> = {};
+			// Si ya tenemos el mapa construido para este tema, no lo reconstruimos
+			if (this._iconThemeId === iconTheme && this._iconMap) return;
 
-		// Mapear nombres de archivo
-		if (themeJson.fileNames) {
-			for (const name in themeJson.fileNames) {
-				iconMap[`name:${name.toLowerCase()}`] = themeJson.fileNames[name];
+			console.log(`[SideTabs] Construyendo mapa de iconos para tema ${iconTheme}...`);
+
+			// Obtenemos la extensión que provee este tema de iconos
+			const ext = vscode.extensions.all.find(e =>
+				e.packageJSON.contributes?.iconThemes?.some((t: any) => t.id === iconTheme)
+			);
+			if (!ext) {
+				console.log(`[SideTabs] No se encontró extensión para tema de iconos ${iconTheme}`);
+				return;
 			}
-		}
-		// Mapear extensiones
-		if (themeJson.fileExtensions) {
-			for (const ext in themeJson.fileExtensions) {
-				iconMap[`ext:${ext.toLowerCase()}`] = themeJson.fileExtensions[ext];
+
+			// Encontramos la contribución específica del tema
+			const themeContribution = ext.packageJSON.contributes.iconThemes.find((t: any) => t.id === iconTheme);
+			if (!themeContribution) return;
+
+			// Construimos la ruta al archivo JSON del tema
+			const themePath = path.join(ext.extensionPath, themeContribution.path);
+			if (!fs.existsSync(themePath)) {
+				console.log(`[SideTabs] No existe el archivo de tema ${themePath}`);
+				return;
 			}
-		}
-		// Mapear languageIds
-		if (themeJson.languageIds) {
-			for (const lang in themeJson.languageIds) {
-				iconMap[`lang:${lang.toLowerCase()}`] = themeJson.languageIds[lang];
+
+			// OPTIMIZACIÓN: Usamos try-catch para manejo de errores
+			const themeJson = JSON.parse(fs.readFileSync(themePath, 'utf8'));
+
+			// Guardamos los datos del tema
+			this._iconThemeId = iconTheme;
+			this._iconThemePath = themePath;
+			this._iconThemeJson = themeJson;
+
+			// Construimos el mapa de iconos
+			const iconMap: Record<string, string> = {};
+
+			// Construimos el mapa de forma optimizada
+			if (themeJson.fileNames) {
+				Object.entries(themeJson.fileNames).forEach(([name, value]) => {
+					iconMap[`name:${name.toLowerCase()}`] = value as string;
+				});
 			}
+
+			if (themeJson.fileExtensions) {
+				Object.entries(themeJson.fileExtensions).forEach(([ext, value]) => {
+					iconMap[`ext:${ext.toLowerCase()}`] = value as string;
+				});
+			}
+
+			if (themeJson.languageIds) {
+				Object.entries(themeJson.languageIds).forEach(([lang, value]) => {
+					iconMap[`lang:${lang.toLowerCase()}`] = value as string;
+				});
+			}
+
+			this._iconMap = iconMap;
+			console.log(`[SideTabs] Mapa de iconos construido con ${Object.keys(iconMap).length} entradas`);
+		} catch (error) {
+			console.error('[SideTabs] Error al construir mapa de iconos:', error);
 		}
-		this._iconMap = iconMap;
 	}
+
+	// Caché de rutas de iconos para evitar recálculos
+	private _iconPathCache: Map<string, string> = new Map();
 
 	private async getFileIconAsBase64(fileName: string, context: vscode.ExtensionContext, languageId?: string): Promise<string | undefined> {
 		try {
-			await this.buildIconMap(context);
-			if (!this._iconMap || !this._iconThemeJson) return undefined;
+			// Verificar que tengamos el mapa de iconos
+			if (!this._iconMap || !this._iconThemeJson) {
+				// Solo construir el mapa si no existe
+				await this.buildIconMap(context);
+				if (!this._iconMap || !this._iconThemeJson) return undefined;
+			}
+
 			const themeJson = this._iconThemeJson;
 			const fileNameLower = fileName.toLowerCase();
 			const extName = fileNameLower.split('.').pop() || '';
-			let iconId: string | undefined = undefined;
 
-			// 1. Buscar por nombre de archivo exacto
-			if (this._iconMap[`name:${fileNameLower}`]) {
-				iconId = this._iconMap[`name:${fileNameLower}`];
-			}
-			// 2. Buscar por extensión
-			if (!iconId && this._iconMap[`ext:${extName}`]) {
-				iconId = this._iconMap[`ext:${extName}`];
-			}
-			// 3. Buscar por languageId SIEMPRE si no hay por nombre ni extensión
-			if (!iconId && languageId && this._iconMap[`lang:${languageId.toLowerCase()}`]) {
-				iconId = this._iconMap[`lang:${languageId.toLowerCase()}`];
-			}
-			// 4. Fallback: icono de archivo por defecto
-			if (!iconId) {
-				if (themeJson.iconDefinitions && themeJson.iconDefinitions._file) {
-					iconId = '_file';
-				} else if (themeJson.iconDefinitions && themeJson.iconDefinitions.file) {
-					iconId = 'file';
-				} else {
-					for (const key in themeJson.iconDefinitions) {
-						if (key.toLowerCase().includes('file') && !key.toLowerCase().includes('folder')) {
-							iconId = key;
-							break;
+			// Clave de caché para este archivo/lenguaje
+			const cacheKey = `${fileNameLower}|${languageId || ''}`;
+
+			// OPTIMIZACIÓN: Verificar si ya tenemos la ruta en caché
+			let iconPath = this._iconPathCache.get(cacheKey);
+
+			if (!iconPath) {
+				let iconId: string | undefined = undefined;
+
+				// Estrategia de búsqueda optimizada
+				iconId = this._iconMap[`name:${fileNameLower}`] ||
+					(extName && this._iconMap[`ext:${extName}`]) ||
+					(languageId && this._iconMap[`lang:${languageId.toLowerCase()}`]);
+
+				// Fallback al icono de archivo por defecto
+				if (!iconId) {
+					if (themeJson.iconDefinitions?.['_file']) {
+						iconId = '_file';
+					} else if (themeJson.iconDefinitions?.['file']) {
+						iconId = 'file';
+					} else {
+						// Buscar cualquier icono que contenga "file" en su nombre
+						const fileIconKey = Object.keys(themeJson.iconDefinitions || {})
+							.find(key => key.toLowerCase().includes('file') && !key.toLowerCase().includes('folder'));
+
+						if (fileIconKey) {
+							iconId = fileIconKey;
 						}
 					}
 				}
+
+				// Si no encontramos un iconId, no hay icono
+				if (!iconId || !themeJson.iconDefinitions) {
+					return undefined;
+				}
+
+				// Obtener la definición del icono
+				const iconDef = themeJson.iconDefinitions[iconId];
+				if (!iconDef) {
+					return undefined;
+				}
+
+				// Obtener la ruta al icono
+				iconPath = iconDef.iconPath || iconDef.path;
+				if (!iconPath) {
+					return undefined;
+				}
+
+				// Guardar en caché para uso futuro
+				this._iconPathCache.set(cacheKey, iconPath);
 			}
-			if (!iconId || !themeJson.iconDefinitions) {
-				return undefined;
-			}
-			const iconDef = themeJson.iconDefinitions[iconId];
-			if (!iconDef) {
-				return undefined;
-			}
-			let iconPath = iconDef.iconPath || iconDef.path;
-			if (!iconPath) {
-				return undefined;
-			}
+
+			// Construir la ruta absoluta al archivo de icono
 			const absIconPath = path.join(path.dirname(this._iconThemePath!), iconPath);
+
+			// Verificar que el archivo existe
 			if (!fs.existsSync(absIconPath)) {
 				return undefined;
 			}
+
+			// OPTIMIZACIÓN: Leer el archivo de forma asíncrona
 			const fileData = fs.readFileSync(absIconPath);
 			const base64Data = fileData.toString('base64');
 			const isSvg = absIconPath.toLowerCase().endsWith('.svg');
 			const mimeType = isSvg ? 'image/svg+xml' : 'image/png';
 			const dataUri = `data:${mimeType};base64,${base64Data}`;
+
 			return dataUri;
 		} catch (e) {
+			console.error(`[SideTabs] Error al obtener icono para ${fileName}:`, e);
 			return undefined;
 		}
 	}
@@ -618,8 +663,8 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 			}
 		}
 
-		// Precargar TODOS los iconos antes de generar el HTML
-		await this.preloadAllIcons(allTabsFlat, context);
+		// Precargar los iconos necesarios para el HTML
+		await this.preloadIconsInBackground(false);
 
 		// Recopilar todas las pestañas con metadatos
 		const allTabs: { tab: vscode.Tab, group: vscode.TabGroup, languageId?: string }[] = [];
@@ -898,7 +943,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 				} catch { }
 			}
 			if (fileName) {
-				const iconBase64 = await this.getIconForFile(fileName, context, languageId);
+				const iconBase64 = await this.getFileIconAsBase64(fileName, context, languageId);
 				if (iconBase64) {
 					iconHtml = `<div class="icon-container">
 						<div class="file-icon" style="width:16px;height:16px;background-image:url('${iconBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;position:absolute;z-index:1;"></div>
@@ -1061,9 +1106,11 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 export function activate(context: vscode.ExtensionContext) {
 	console.log('[SideTabs] FUNCIÓN ACTIVATE INVOCADA');
 
+	// Precargamos la localización para reutilizarla en toda la extensión
+	Localization.getInstance();
+
 	// Crea el proveedor de vista
 	const provider = new SideTabsPanelViewProvider(context.extensionUri, context);
-	console.log('[SideTabs] Proveedor creado');
 
 	// Registramos el proveedor de vista
 	const disposable = vscode.window.registerWebviewViewProvider(
@@ -1071,16 +1118,10 @@ export function activate(context: vscode.ExtensionContext) {
 		provider
 	);
 	context.subscriptions.push(disposable);
-	console.log('[SideTabs] Proveedor registrado con ID:', SideTabsPanelViewProvider.viewType);
 
-	// Intentar mostrar la vista automáticamente
-	setTimeout(async () => {
-		try {
-			await vscode.commands.executeCommand('sideTabsPanelView.focus');
-		} catch (e) {
-			// Silenciar error
-		}
-	}, 1000);
+	// OPTIMIZACIÓN: No intentamos mostrar la vista automáticamente al inicio
+	// para evitar sobrecargas. La vista se mostrará cuando el usuario
+	// haga clic en el icono de la barra de actividad.
 
 	// Registramos los comandos para el menú contextual
 	context.subscriptions.push(
@@ -1133,7 +1174,7 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 
 			// Usar el mismo proveedor para cargar los iconos
-			await provider.preloadAllIcons(allTabs, context);
+			await provider.preloadIconsInBackground(false);
 		} catch (e) {
 			// Ignorar errores en la precarga, no son críticos
 		}
