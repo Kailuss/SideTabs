@@ -736,8 +736,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 			}
 			.tab .directory {
 				opacity: 0.6;
-				font-size: ${fontSize}px;
-				font-style: italic;
+				font-size: ${fontSize - 2}px;
 				overflow: hidden;
 				text-overflow: ellipsis;
 				white-space: nowrap;
@@ -767,7 +766,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 				font-weight: 500;
 				font-size: ${Math.max(fontSize - 1, 12)}px; /* Ajustamos también el tamaño del contador */
 			}
-			.tab .tab-actions { 
+			.tab .tab-actions {
 				margin-left: 8px;
 				position: relative;
 				width: 18px;
@@ -932,7 +931,7 @@ class SideTabsPanelViewProvider implements vscode.WebviewViewProvider {
 
 			html += `<div class="tab${isActive ? ' active' : ''}"
 			data-label="${label}"
-			title="${directoryPath ? `${directoryPath}/${label}` : label}"
+			title="${directoryPath ? `${directoryPath}\\${label}` : label}"
 			draggable="true">
 		<div class="click-layer"></div>
 		${iconHtml}
