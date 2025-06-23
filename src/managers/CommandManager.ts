@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Localization } from '../localization';
+import { Localization } from '../localization/Localization';
 
 /**
  * Gestiona los comandos y menús contextuales de las pestañas

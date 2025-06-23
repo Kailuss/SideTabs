@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { TabManager } from '../tabs';
-import { CommandManager } from '../commands';
+import { TabManager } from './TabManager';
+import { CommandManager } from './CommandManager';
 
 /**
  * Gestiona los eventos del webview (mensajes, clicks, etc.)

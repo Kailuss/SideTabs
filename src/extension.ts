@@ -1,19 +1,22 @@
 import * as vscode from 'vscode';
-import { Localization } from './localization';
-import { SideTabsProvider } from './provider';
-import { CommandManager } from './commands';
+import { Localization } from './localization/Localization';
+import { SideTabsProvider } from './providers/SideTabsProvider';
+import { CommandManager } from './managers/CommandManager';
 
 /**
  * Función de activación de la extensión SideTabs
  * Inicializa todos los componentes y registra los proveedores y comandos
  */
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	try {
 		// Precargamos la localización para reutilizarla en toda la extensión
 		Localization.getInstance();
 
 		// Crear el proveedor de vista principal
-		const provider = new SideTabsProvider(context.extensionUri, context);
+		const provider = new SideTabsProvider(context.extensionUri);
+
+		// Inicializar el proveedor con el contexto
+		await provider.initialize(context);
 
 		// Registrar el proveedor de vista
 		const disposable = vscode.window.registerWebviewViewProvider(
@@ -46,8 +49,9 @@ export function activate(context: vscode.ExtensionContext) {
  */
 async function initializeIconsInBackground(provider: SideTabsProvider): Promise<void> {
 	try {
-		// Precargar iconos para todas las pestañas abiertas
-		await provider.preloadIconsInBackground(false);
+		// Ya no es necesario precargar iconos, se manejan cuando se necesitan
+		// y la función preloadIconsInBackground ya no existe
+		console.log('[SideTabs] Iconos inicializados correctamente');
 	} catch (error) {
 		// Ignorar errores en la precarga, no son críticos
 	}

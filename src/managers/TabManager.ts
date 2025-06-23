@@ -27,9 +27,10 @@ export class TabManager {
 			// Para otros tipos de input que tengan URI
 			return (tab as any).input.uri.toString();
 		} else {
-			// Para pestañas sin URI (como settings, etc.), usamos el label + timestamp único
+			// Para pestañas sin URI (como settings, etc.), usamos un ID estable basado en el label
+			// Sin timestamp para evitar que reaparezcan tras cerrarse
 			const tabIndex = group.tabs.indexOf(tab);
-			return `${tab.label}#tab-${tabIndex}#${Date.now()}`;
+			return `${tab.label}#tab-${tabIndex}`;
 		}
 	}
 

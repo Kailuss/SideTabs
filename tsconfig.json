@@ -12,8 +12,13 @@
 		"esModuleInterop": true,
 		"skipLibCheck": true
 	},
+	"include": [
+		"src/**/*"
+	],
 	"exclude": [
 		"node_modules",
-		".vscode-test"
+		".vscode-test",
+		"test-diagnostics.ts",
+		"test-diagnostics.js"
 	]
 }

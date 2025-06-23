@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { Localization } from '../localization';
-import { IconManager } from '../icons';
-import { DiagnosticsManager } from '../diagnostics';
-import { TabManager } from '../tabs';
-import { CommandManager } from '../commands';
-import { UIManager } from '../ui';
-import { EventManager } from '../events';
+import { Localization } from '../localization/Localization';
+import { IconManager } from '../managers/IconManager';
+import { DiagnosticsManager } from '../managers/DiagnosticsManager';
+import { TabManager } from '../managers/TabManager';
+import { CommandManager } from '../managers/CommandManager';
+import { UIManager } from '../managers/UIManager';
+import { EventManager } from '../managers/EventManager';
 
 /**
  * Proveedor principal del webview panel de SideTabs
@@ -34,6 +34,7 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 	private pendingUpdate: boolean = false;
 	private lastActiveTabId: string | undefined;
 	private lastTabsMap: Map<string, any> | undefined;
+	private lastDiagnosticsMap: Map<string, any> | undefined;
 
 	constructor(extensionUri: vscode.Uri, context?: vscode.ExtensionContext) {
 		this._extensionUri = extensionUri;
@@ -46,6 +47,15 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 		this.commandManager = new CommandManager();
 		this.uiManager = new UIManager(this.iconManager, this.diagnosticsManager);
 		this.eventManager = new EventManager(this.tabManager, this.commandManager);
+	}
+
+	/**
+	 * Inicialización asíncrona del proveedor (para activate)
+	 */
+	public async initialize(context: vscode.ExtensionContext): Promise<void> {
+		this._context = context;
+		// Puedes agregar aquí cualquier inicialización asíncrona necesaria
+		await this.iconManager.buildIconMap(context);
 	}
 
 	/**
@@ -87,6 +97,8 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 		this.updateView(true);
 	}
 
+
+
 	/**
 	 * Configura las opciones del webview
 	 */
@@ -95,8 +107,8 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.options = {
 			enableScripts: true,
 			localResourceRoots: [
-				vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist'),
-				this._context!.globalStorageUri,
+				this._extensionUri,
+				vscode.Uri.joinPath(this._extensionUri, 'media'),
 				iconsDir
 			]
 		};
@@ -223,8 +235,15 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 			this.updateActiveTabState();
 		});
 
-		// Diagnósticos con mayor debouncing (750ms) para evitar sobrecarga en proyectos pesados
-		vscode.languages.onDidChangeDiagnostics(() => this.scheduleDiagnosticsUpdate(), this);
+		// Diagnósticos con mínimo debouncing para reaccionar inmediatamente
+		vscode.languages.onDidChangeDiagnostics((e) => {
+			// Procesar solo los archivos que cambiaron realmente sus diagnósticos
+			console.log(`[SideTabs] Cambio en diagnósticos detectado para ${e.uris.length} archivos`);
+			this.scheduleDiagnosticsUpdate();
+		}, this);
+
+		// También actualizar al guardar archivos para reflejar rápidamente correcciones
+		vscode.workspace.onDidSaveTextDocument(() => this.scheduleDiagnosticsUpdate(), this);
 		vscode.workspace.onDidOpenTextDocument(() => this.scheduleUpdate(false, true), this);
 
 		// Listener para mensajes del webview
@@ -280,7 +299,9 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 	}
 
 	/**
-	 * Programa actualizaciones de diagnósticos con mayor debouncing
+	 * Programa actualizaciones de diagnósticos con menor debouncing
+	 * Usa mensaje reactivo para actualizar solo los diagnósticos sin regenerar la vista
+	 * Ahora con mayor reactividad para mostrar la fila de diagnósticos inmediatamente
 	 */
 	private scheduleDiagnosticsUpdate(): void {
 		// Si ya hay una actualización de diagnósticos programada, cancelarla
@@ -288,10 +309,61 @@ export class SideTabsProvider implements vscode.WebviewViewProvider {
 			clearTimeout(this.diagnosticsTimeout);
 		}
 
-		// Programar actualización con debouncing de 750ms para diagnósticos
-		this.diagnosticsTimeout = setTimeout(() => {
-			this.scheduleUpdate(false, false);
-		}, 750);
+		// Programar actualización reactiva de diagnósticos con un tiempo muy corto
+		this.diagnosticsTimeout = setTimeout(async () => {
+			try {
+				// Si no hay vista activa, actualizar toda la vista
+				if (!this._view || !this._view.visible || !this._view.webview) {
+					this.scheduleUpdate(false, false);
+					return;
+				}
+
+				console.log('[SideTabs] Actualizando diagnósticos inmediatamente...');
+
+				// Obtener todas las pestañas con metadatos
+				const allTabs = this.tabManager.getAllTabsWithMetadata();
+				const diagnosticsUpdates = [];
+
+				// Procesar solo pestañas que tienen URI para diagnósticos
+				for (const tabInfo of allTabs) {
+					const { tab, uniqueId, group } = tabInfo;
+
+					if (tab.input instanceof vscode.TabInputText) {
+						// Obtener información de diagnósticos
+						const problems = await this.diagnosticsManager.getProblems(tab.input.uri);
+						const isActive = group.activeTab === tab;
+						const labelClass = this.diagnosticsManager.getLabelClass(problems, isActive);
+						const problemsText = this.diagnosticsManager.getTotalProblems(problems);
+
+						// Generar tooltip con la información actualizada
+						const directoryPath = this.tabManager.getDirectoryPath(tab);
+						const tooltipContent = this.uiManager.generateEnhancedTooltip(tab, directoryPath, problems)
+							.replace(/"/g, '&quot;');
+
+						// Añadir a la lista de actualizaciones
+						diagnosticsUpdates.push({
+							uniqueId,
+							problems, // Incluye la información de líneas de error
+							labelClass,
+							problemsText,
+							tooltipContent
+						});
+					}
+				}
+
+				// Enviar actualización reactiva si hay diagnósticos para actualizar
+				if (diagnosticsUpdates.length > 0 && this._view && this._view.webview) {
+					this._view.webview.postMessage({
+						command: 'updateDiagnostics',
+						diagnostics: diagnosticsUpdates
+					});
+				}
+			} catch (error) {
+				console.error('[SideTabs] Error al actualizar diagnósticos:', error);
+				// En caso de error, caer de nuevo al método tradicional
+				this.scheduleUpdate(false, false);
+			}
+		}, 50); // Reducimos drásticamente el debounce para obtener una actualización casi inmediata
 	}
 
 	/**

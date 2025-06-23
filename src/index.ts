@@ -1,9 +1,9 @@
 // Exportaciones de los módulos principales de SideTabs
-export { Localization } from './localization';
-export { IconManager } from './icons';
-export { DiagnosticsManager } from './diagnostics';
-export { TabManager, TabInfo } from './tabs';
-export { CommandManager } from './commands';
-export { UIManager } from './ui';
-export { EventManager } from './events';
-export { SideTabsProvider } from './provider';
+export { Localization } from './localization/Localization';
+export { IconManager } from './managers/IconManager';
+export { DiagnosticsManager } from './managers/DiagnosticsManager';
+export { TabManager, TabInfo } from './managers/TabManager';
+export { CommandManager } from './managers/CommandManager';
+export { UIManager } from './managers/UIManager';
+export { EventManager } from './managers/EventManager';
+export { SideTabsProvider } from './providers/SideTabsProvider';
