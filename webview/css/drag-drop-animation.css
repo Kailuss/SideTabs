@@ -1,0 +1,59 @@
+/* Estilos para el sistema de drag & drop con animación */
+.tab {
+	/* Sin transición por defecto - se aplica dinámicamente cuando es necesario */
+	position: relative;
+	z-index: 1;
+	will-change: transform;
+	/* Asegurar que las pestañas mantengan su espacio durante las animaciones */
+	box-sizing: border-box;
+}
+
+/* Estado de arrastre activo - deshabilitar hover en todas las pestañas */
+.tabs-container.dragging-active .tab:hover {
+	/* Anular todos los efectos de hover durante el arrastre */
+	background-color: inherit !important;
+	opacity: inherit !important;
+	transform: inherit !important;
+	box-shadow: inherit !important;
+	border-color: inherit !important;
+	color: inherit !important;
+}
+
+/* Deshabilitar pointer events en todas las pestañas excepto la arrastrada durante el arrastre */
+.tabs-container.dragging-active .tab:not(.dragging) {
+	pointer-events: none;
+}
+
+/* Pestaña original durante el arrastre (semi-transparente pero presente en el DOM) */
+.tab.dragging {
+	opacity: 1.0;
+	pointer-events: none;
+	/* Mantener el espacio en el layout */
+	visibility: visible;
+}
+
+/* Elemento fantasma que sigue al cursor */
+.drag-ghost {
+	opacity: 0.0;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+	transition: none !important;
+	pointer-events: none;
+	z-index: 1000;
+	will-change: transform;
+	transform-origin: center;
+	/* Ligeramente escalado para dar sensación de elevación */
+	transform: scale(1.03);
+	/* Asegurar que no interfiera con el layout */
+	position: fixed;
+}
+
+/* Destacar visualmente el fantasma en temas oscuros y claros */
+body.vscode-dark .drag-ghost {
+	background-color: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.vscode-light .drag-ghost {
+	background-color: rgba(0, 0, 0, 0.05);
+	border: 1px solid rgba(0, 0, 0, 0.1);
+}

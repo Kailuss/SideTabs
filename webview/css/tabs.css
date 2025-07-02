@@ -1,0 +1,104 @@
+/* ===========================================================
+   PESTAÑAS - ESTILOS GENERALES
+   =========================================================== */
+
+
+/*
+ * Estructura base de cada pestaña y sus estados
+ */
+
+.tab {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+	position: relative;
+	z-index: 1;
+	border-left: 4px solid transparent;
+	/* transition: transform 0.64s ease-out; COMENTADO: Conflicto con drag&drop */
+	flex-wrap: wrap;
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+}
+
+/** Estados de la pestaña - usando !important para garantizar que se apliquen */
+.tab.active {
+	background-color: var(--vscode-list-activeSelectionBackground) !important;
+	color: var(--vscode-list-activeSelectionForeground) !important;
+	border-left: 4px solid var(--vscode-focusBorder) !important;
+}
+
+.tab.activating {
+	animation: pulse-border 1s infinite;
+}
+
+@keyframes pulse-border {
+	0% {
+		border-left: 4px solid rgba(0, 127, 212, 0.5);
+	}
+
+	50% {
+		border-left: 4px solid var(--vscode-focusBorder, #007fd4);
+	}
+
+	100% {
+		border-left: 4px solid rgba(0, 127, 212, 0.5);
+	}
+}
+
+.tab:hover:not(.active) {
+	background-color: color-mix(in srgb, var(--vscode-list-hoverBackground) 50%, transparent) !important;
+	border-left: 4px solid transparent !important;
+}
+
+/* Interacciones de tab */
+/* Botón cerrar e indicador de archivo modificado */
+.tab:hover .tab-close-button {
+	opacity: 1;
+}
+
+.tab:hover .tab-dirty-indicator {
+	opacity: 0;
+}
+
+.tab.contextmenu-active {
+	background-color: var(--vscode-list-hoverBackground);
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+
+/* Pestaña en proceso de cierre - animación */
+.tab.closing {
+	opacity: 0;
+	transform: scaleY(0);
+	height: 0;
+	min-height: 0;
+	padding: 0;
+	border: none;
+	overflow: hidden;
+	transition: none !important;
+}
+
+.tab.dragging {
+	opacity: 0.7;
+	/* Consistente con drag-drop-animation.css */
+	cursor: move;
+	z-index: 100;
+	transition: none !important;
+	/* Sin transiciones durante arrastre */
+}
+
+.tab.static {
+	opacity: 0.64;
+	pointer-events: none;
+	border-left-color: transparent;
+}
+
+/* Estado de diagnósticos */
+.tab.has-diagnosis {
+	height: auto !important;
+	min-height: var(--tab-height);
+}

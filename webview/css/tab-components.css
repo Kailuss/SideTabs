@@ -1,0 +1,253 @@
+/*/ Estilos para los elementos internos de las pestañas */
+
+/** Contenedor principal para los elementos de la pestaña */
+.tab-content {
+	display: flex;
+	width: 100%;
+	position: relative;
+	align-items: center;
+}
+
+/** Contenedor icono - fijo a la izquierda */
+.tab-icon-container {
+	position: relative;
+	margin-right: 11px;
+	margin-top: 1px;
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+}
+
+.tab-icon-container img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+/** Contenedor nombre, ruta y diagnósticos - central */
+.tab-info-container {
+	flex-grow: 1;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	min-width: 30px;
+	height: auto;
+	white-space: nowrap;
+	margin-bottom: 2px;
+}
+
+/** Contenedor de acciones a la derecha */
+.tab-actions-container {
+	margin-left: 8px;
+	position: absolute;
+	top: 0.1em;
+	right: 0;
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+}
+
+/** Indicador de archivo modificado */
+.tab-dirty-indicator {
+	display: flex;
+	cursor: pointer;
+	padding: 0;
+	border-radius: 50%;
+	background: transparent;
+	line-height: 1;
+	vertical-align: middle;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	color: var(--vscode-editorInfo-foreground);
+}
+
+.tab-dirty-indicator svg {
+	width: 15px;
+	height: 15px;
+	display: block;
+}
+
+/** Botón de cerrar pestaña */
+.tab-close-button {
+	display: flex;
+	cursor: pointer;
+	padding: 0;
+	border-radius: 32px;
+	background: transparent;
+	line-height: 1;
+	vertical-align: middle;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+}
+
+.tab-close-button svg {
+	width: 15px;
+	height: 15px;
+	display: block;
+	stroke: var(--vscode-sideBarTitle-foreground);
+}
+
+.tab.active .tab-close-button svg {
+	stroke: var(--vscode-list-activeSelectionForeground);
+}
+
+.tab-close-button:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.tab-close-button:hover svg {
+	stroke: var(--vscode-editor-foreground);
+}
+
+/** Nombre del archivo */
+.tab-filename {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-size);
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+}
+
+.tab.active .tab-filename {
+	color: var(--vscode-list-activeSelectionForeground);
+}
+
+.tab-filename.faded {
+	color: var(--vscode-editorLineNumber-foreground);
+}
+
+/** Estados de diagnósticos para el nombre */
+.tab-filename.error {
+	color: #ff6666 !important;
+	opacity: 1 !important;
+}
+
+.tab-filename.warning {
+	color: #cca700 !important;
+	opacity: 1 !important;
+}
+
+.tab-filename.info {
+	color: #3794ff !important;
+	opacity: 1 !important;
+}
+
+/** Ruta del archivo */
+.tab-filepath {
+	color: var(--vscode-editorLineNumber-foreground);
+	font-size: var(--subtitle-font-size);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+}
+
+/** Diagnósticos */
+.tab-diagnosis {
+	display: flex;
+	align-items: center;
+	margin-top: 1px;
+	width: 100%;
+	font-size: var(--subtitle-font-size);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--vscode-descriptionForeground);
+}
+
+.diagnosis-compact {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 8px;
+	/* font-size: var(--diagnosis-font-size, 11px); */
+	/* vertical-align: middle; */
+	opacity: 1.0;
+	/* gap: 4px; */
+}
+
+.diagnosis-count {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 3px;
+	font-weight: 400;
+}
+
+.diagnosis-count.error {
+	color: #ff6666;
+}
+
+.diagnosis-count.warning {
+	color: #cca700;
+}
+
+.diagnosis-count.info {
+	color: #3794ff;
+}
+
+.diagnosis-sep {
+	color: var(--vscode-editorLineNumber-foreground);
+	font-size: var(--subtitle-font-size) !important;
+	position: relative;
+	top: -0.13em;
+}
+
+/* Animaciones para nuevos diagnósticos */
+.diagnosis-count.new {
+	animation: countAppear 5.3s ease-out;
+}
+
+@keyframes countAppear {
+	0% {
+		transform: scale(0.7);
+		opacity: 0;
+	}
+
+	50% {
+		transform: scale(1.1);
+	}
+
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+
+
+/* Evitar selección en componentes de tabs */
+.tab-content,
+.tab-info-container,
+.tab-filename,
+.tab-path,
+.tab-diagnosis,
+.tab-close-button,
+.tab-icon-container {
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	cursor: pointer;
+}
+
+/* Excepción para el botón de cierre que debería tener un cursor específico */
+.tab-close-button {
+	cursor: pointer;
+}

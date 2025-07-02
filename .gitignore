@@ -2,5 +2,3 @@ node_modules/
 out/
 builds/
 .vscode/
-test-diagnostics.js
-test-diagnostics.ts

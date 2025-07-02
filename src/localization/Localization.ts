@@ -18,6 +18,20 @@ export class Localization {
 		return Localization._instance;
 	}
 
+	/**
+	 * Obtiene un string localizado por su clave
+	 */
+	public static getString(key: string): string {
+		return Localization.getInstance().getLocalizedString(key);
+	}
+
+	/**
+	 * Obtiene un string localizado por su clave
+	 */
+	public getLocalizedString(key: string): string {
+		return this._strings[key] || key;
+	}
+
 	private loadCurrentLanguage(): void {
 		try {
 			// Obtener configuración de idioma de VS Code
@@ -70,7 +84,7 @@ export class Localization {
 				};
 			}
 		} catch (error) {
-			console.error('[SideTabs] Error loading localization:', error);
+			console.error('[LoverTab] Error loading localization:', error);
 		}
 	}
 

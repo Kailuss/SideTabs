@@ -4,21 +4,58 @@
 		"target": "es2020",
 		"outDir": "out",
 		"lib": [
-			"es2020"
+			"es2020",
+			"dom"
 		],
 		"sourceMap": true,
 		"rootDir": "src",
 		"strict": true,
 		"esModuleInterop": true,
-		"skipLibCheck": true
+		"skipLibCheck": true,
+		"paths": {
+			"@services/*": [
+				"src/services/*"
+			],
+			"@gui/*": [
+				"src/services/templates/*"
+			],
+			"@diagnosis/*": [
+				"src/services/diagnosis/*"
+			],
+			"@icons/*": [
+				"src/services/utils/*"
+			],
+			"@localization/*": [
+				"./src/localization/*"
+			],
+			"@events/*": [
+				"src/services/events/*"
+			],
+			"@utils/*": [
+				"./src/utils/*"
+			],
+			"@commands/*": [
+				"src/services/commands/*"
+			],
+			"@svg/*": [
+				"./webview/js/icons/svg/*"
+			]
+		},
+		"baseUrl": "."
 	},
 	"include": [
-		"src/**/*"
+		"src/**/*",
+		"webview/js/icons/iconsManager.d.ts",
+		"webview/js/diagnosis/diagnosisManager.js",
+		"webview/js/tabs/tabManager.js",
+		"webview/js/gui/uiEffects.js",
+		"webview/js/icons/iconsManager.js",
+		"src/services"
 	],
 	"exclude": [
 		"node_modules",
 		".vscode-test",
-		"test-diagnostics.ts",
-		"test-diagnostics.js"
+		"test-diagnosis.ts",
+		"test-diagnosis.js"
 	]
 }

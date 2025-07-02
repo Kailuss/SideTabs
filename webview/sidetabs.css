@@ -1,0 +1,108 @@
+/** Estilos base del documento */
+body {
+   font-family: var(--vscode-font-family);
+   margin: 0;
+   padding: 0;
+   background: var(--vscode-sideBar-background);
+   color: var(--vscode-foreground);
+}
+
+/** Variables globales (duplicadas del critical-styles para consistencia) */
+:root {
+   --tab-height: 30px;
+   --font-size: 14px;
+   --subtitle-font-size: 12px;
+
+   /* Variables de tema */
+   --tab-active-border: var(--vscode-focusBorder);
+   --tab-hover-background: var(--vscode-list-hoverBackground);
+   --tab-active-background: var(--vscode-list-activeSelectionBackground);
+   --tab-active-foreground: var(--vscode-list-activeSelectionForeground);
+
+   /* Colores personalizados */
+   --modified-indicator-color: var(--vscode-editorInfo-foreground, #75beff);
+   --warning-indicator-color: var(--vscode-editorWarning-foreground, #cca700);
+   --error-indicator-color: var(--vscode-editorError-foreground, #f14c4c);
+}
+
+/** Estilos base del contenedor principal */
+#tabs-container {
+   display: flex;
+   flex-direction: column;
+   height: 100vh;
+   overflow-y: auto;
+   overflow-x: hidden;
+   background: var(--vscode-sideBar-background);
+   scrollbar-width: thin;
+   scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
+}
+
+/** Utilidades generales */
+.file-icon {
+   display: inline-block;
+   vertical-align: top;
+   flex-shrink: 0;
+   pointer-events: none;
+}
+
+/** Estilo para scrollbar */
+#tabs-container::-webkit-scrollbar {
+   width: 8px;
+}
+
+#tabs-container::-webkit-scrollbar-thumb {
+   background-color: var(--vscode-scrollbarSlider-background);
+   border-radius: 4px;
+}
+
+#tabs-container::-webkit-scrollbar-thumb:hover {
+   background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Evita que el scrollbar empuje el contenido */
+
+html, body {
+   height: 100%;
+   overflow: auto;
+   scrollbar-width: thin; /* Firefox */
+   scrollbar-color: rgba(100,100,100,0.5) transparent;
+ }
+ 
+ body::-webkit-scrollbar {
+   width: 8px;
+ }
+ 
+ body::-webkit-scrollbar-track {
+   background: transparent;
+ }
+ 
+ body::-webkit-scrollbar-thumb {
+   background-color: rgba(100, 100, 100, 0.5);
+   border-radius: 4px;
+   transition: background-color 0.3s;
+ }
+ 
+ body:hover::-webkit-scrollbar-thumb {
+   background-color: rgba(100, 100, 100, 0.7);
+ }
+ 
+
+/** Previene selección de texto en toda la interfaz de pestañas */
+#tabs-container,
+.tabs-container,
+#tabs-container * {
+   user-select: none !important;
+   -webkit-user-select: none !important;
+   -moz-user-select: none !important;
+   -ms-user-select: none !important;
+}
+
+/** Establece cursor pointer por defecto para elementos interactivos */
+.tab,
+.tab-content,
+.tab-icon-container,
+.tab-info-container,
+.tab-filename,
+.tab-filepath {
+   cursor: pointer;
+}
