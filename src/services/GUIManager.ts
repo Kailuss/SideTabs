@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TabInfo } from './TabManager';
-import { IconManager } from './IconManager';
-import { DiagnosisManager } from './DiagnosisManager';
+import { TabIconManager } from './TabIconManager';
+import { TabDiagnosticsManager } from './TabDiagnosticsManager';
 import iconUtils from './utils/iconsUtils';
-import { renderTab, renderDiagnosis } from './templates/TabTemplate';
+import { renderTab, renderDiagnostics } from './templates/TabTemplate';
 import { renderBaseTemplate } from './templates/BaseTemplate';
 import { renderIconInitializationScript } from './templates/IconsTemplate';
 
@@ -20,13 +20,13 @@ interface GUITabInfo extends TabInfo {
 
 //· Genera el HTML 
 export class GUIManager {
-	private iconManager: IconManager;
-	private diagnosisManager: DiagnosisManager;
-	private readonly _consoleId: string = "[LoverTab | GUIManager] ";
+	private iconManager: TabIconManager;
+	private diagnosticsManager: TabDiagnosticsManager;
+	private readonly _consoleId: string = "[SideTabs | GUIManager] ";
 
-	constructor(iconManager: IconManager, diagnosisManager: DiagnosisManager) {
+	constructor(iconManager: TabIconManager, diagnosticsManager: TabDiagnosticsManager) {
 		this.iconManager = iconManager;
-		this.diagnosisManager = diagnosisManager;
+		this.diagnosticsManager = diagnosticsManager;
 	}
 
 	/// Genera el HTML base para el webview usando la plantilla
@@ -39,24 +39,28 @@ export class GUIManager {
 		tabHeight: number
 	): string {
 		const uris = this.getWebviewResourceUris(context, webview);
+		const cspSource = webview.cspSource;
 		return renderBaseTemplate({
 			uris: {
 				mainStyle: uris.mainStyle,
-				codicons: uris.codicons,
 				mainScript: uris.mainScript,
 				styles: {
 					tabs: uris.styles.tabs,
-					dragDrop: uris.styles.dragDrop,
-					dragDropAnimation: uris.styles.dragDropAnimation,
 					tabComponents: uris.styles.tabComponents,
-					diagnosis: uris.styles.diagnosis,
-					diagnosisCompact: uris.styles.diagnosisCompact,
-					actions: uris.styles.actions
+					diagnostics: uris.styles.diagnostics,
+					dragDrop: uris.styles.dragDrop,
+					dragDropAnimation: uris.styles.dragDropAnimation
+				},
+				scripts: {
+					dragDropManager: uris.scripts.dragDropManager,
+					tabDataModel: uris.scripts.tabDataModel,
+					eventsBridge: uris.scripts.eventsBridge
 				}
 			},
 			tabsHtml,
 			fontSize,
-			tabHeight
+			tabHeight,
+			cspSource
 		});
 	}
 
@@ -87,33 +91,33 @@ export class GUIManager {
 		let html = renderBaseTemplate({
 			uris: {
 				mainStyle: uris.mainStyle,
-				codicons: uris.codicons,
 				mainScript: uris.mainScript,
 				styles: {
 					tabs: uris.styles.tabs,
-					dragDrop: uris.styles.dragDrop,
-					dragDropAnimation: uris.styles.dragDropAnimation,
 					tabComponents: uris.styles.tabComponents,
-					diagnosis: uris.styles.diagnosis,
-					diagnosisCompact: uris.styles.diagnosisCompact,
-					actions: uris.styles.actions
+					diagnostics: uris.styles.diagnostics,
+					dragDrop: uris.styles.dragDrop,
+					dragDropAnimation: uris.styles.dragDropAnimation
 				},
 				scripts: {
-					dragDropManager: uris.scripts.dragDropManager
+					dragDropManager: uris.scripts.dragDropManager,
+					tabDataModel: uris.scripts.tabDataModel,
+					eventsBridge: uris.scripts.eventsBridge
 				}
 			},
 			tabsHtml: tabsHTML,
 			fontSize,
-			tabHeight
+			tabHeight,
+			cspSource: webview.cspSource
 		});
 
 		const iconScript = await this.createIconInitializationScript(context);
 		const debugInfo = `
 			<script>
-				console.log('[LoverTab Debug] CSS URI: ${uris.mainStyle.replace(/\\/g, '\\\\')}');
-				console.log('[LoverTab Debug] JS URI: ${uris.mainScript.replace(/\\/g, '\\\\')}');
-				console.log('[LoverTab Debug] Interactions URI: ${uris.tabInteractions.replace(/\\/g, '\\\\')}');
-				console.log('[LoverTab Debug] EventManager URI: ${uris.eventManager.replace(/\\/g, '\\\\')}');
+				console.log('[SideTabs Debug] CSS URI: ${uris.mainStyle.replace(/\\/g, '\\\\')}');
+				console.log('[SideTabs Debug] JS URI: ${uris.mainScript.replace(/\\/g, '\\\\')}');
+				console.log('[SideTabs Debug] EventsBridge URI: ${uris.scripts.eventsBridge.replace(/\\/g, '\\\\')}');
+				console.log('[SideTabs Debug] TabDataModel URI: ${uris.scripts.tabDataModel.replace(/\\/g, '\\\\')}');
 			</script>
 		`;
 		// Inserta debugInfo y iconScript antes de </head>
@@ -137,11 +141,8 @@ export class GUIManager {
 		console.log(this._consoleId + 'CSS URI generado:', uris.mainStyle);
 		console.log(this._consoleId + 'Reemplazando placeholders. CSS URI:', uris.mainStyle);
 
-		html = html.replace(/\{\{codiconsUri\}\}/g, uris.codicons);
 		html = html.replace(/\{\{mainStyleUri\}\}/g, uris.mainStyle);
 		html = html.replace(/\{\{mainScriptUri\}\}/g, uris.mainScript);
-		html = html.replace(/\{\{eventManagerUri\}\}/g, uris.eventManager);
-		html = html.replace(/\{\{tabInteractionsUri\}\}/g, uris.tabInteractions);
 		html = html.replace(/PLACEHOLDER_TABS_CONTENT/g, tabsHtml);
 
 		console.log(this._consoleId + 'HTML inicio:', html.substring(0, 1000));
@@ -190,18 +191,18 @@ export class GUIManager {
 			const iconUrl = iconBase64 || await iconUtils.getIconUrlForFile(tab.resourceUri, tab.label, context, webview);
 
 			// Obtiene los diagnósticos (errores, warnings, infos) para la pestaña
-			const diagnosis = tab.resourceUri ?
-				await this.diagnosisManager.getDiagnosis(tab.resourceUri) :
+			const diagnostics = tab.resourceUri ?
+				await this.diagnosticsManager.getDiagnostics(tab.resourceUri) :
 				{ errors: 0, warnings: 0, infos: 0, hints: 0 };
 
 			// Obtiene la ruta de la carpeta para mostrar debajo del nombre del archivo
 			const folderPath = this.getFolderPath(tab.resourceUri, showDirectoryPath);
 
 			// Renderiza el HTML de los diagnósticos usando la plantilla centralizada
-			const diagnosisHtml = renderDiagnosis({
-				errors: diagnosis.errors,
-				warnings: diagnosis.warnings,
-				infos: diagnosis.infos
+			const diagnosticsHtml = renderDiagnostics({
+				errors: diagnostics.errors,
+				warnings: diagnostics.warnings,
+				infos: diagnostics.infos
 			});
 
 			// Renderiza el HTML de la pestaña usando la plantilla centralizada
@@ -212,12 +213,12 @@ export class GUIManager {
 				directory: folderPath,
 				isActive: tab.isActive,
 				isDirty: tab.isDirty,
-				diagnosis: {
-					errors: diagnosis.errors,
-					warnings: diagnosis.warnings,
-					infos: diagnosis.infos
+				diagnostics: {
+					errors: diagnostics.errors,
+					warnings: diagnostics.warnings,
+					infos: diagnostics.infos
 				},
-				diagnosisLevel: diagnosis.errors > 0 ? 'error' : diagnosis.warnings > 0 ? 'warning' : diagnosis.infos > 0 ? 'info' : undefined
+				diagnosticsLevel: diagnostics.errors > 0 ? 'error' : diagnostics.warnings > 0 ? 'warning' : diagnostics.infos > 0 ? 'info' : undefined
 			});
 		}
 
@@ -253,23 +254,19 @@ export class GUIManager {
 			webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'webview', relativePath)).toString();
 
 		return {
-			codicons: getUri('css/codicons.css'),
 			mainStyle: getUri('sidetabs.css'),
 			mainScript: getUri('sidetabs.js'),
-			eventManager: getUri('js/tabs/eventManager.js'),
-			tabInteractions: getUri('js/tabs/tabInteractions.js'),
 			styles: {
 				tabs: getUri('css/tabs.css'),
+				tabComponents: getUri('css/tab-components.css'),
+				diagnostics: getUri('css/diagnostics.css'),
 				dragDrop: getUri('css/drag-drop.css'),
 				dragDropAnimation: getUri('css/drag-drop-animation.css'),
-				tabComponents: getUri('css/tab-components.css'),
-				diagnosis: getUri('css/diagnosis.css'),
-				diagnosisCompact: getUri('css/diagnosis-compact.css'),
 				actions: getUri('css/actions.css'),
-				tooltips: getUri('css/tooltips.css'),
-				codicons: getUri('css/codicons.css')
 			},
 			scripts: {
+				eventsBridge: getUri('js/eventsBridge.js'),
+				tabDataModel: getUri('js/tabDataModel.js'),
 				dragDropManager: getUri('js/dragDropManager.js')
 			}
 		};

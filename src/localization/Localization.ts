@@ -84,7 +84,7 @@ export class Localization {
 				};
 			}
 		} catch (error) {
-			console.error('[LoverTab] Error loading localization:', error);
+			console.error('[SideTabs] Error loading localization:', error);
 		}
 	}
 

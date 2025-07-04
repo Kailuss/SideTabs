@@ -19,11 +19,8 @@
 			"@gui/*": [
 				"src/services/templates/*"
 			],
-			"@diagnosis/*": [
-				"src/services/diagnosis/*"
-			],
-			"@icons/*": [
-				"src/services/utils/*"
+			"@diagnostics/*": [
+				"src/services/diagnostics/*"
 			],
 			"@localization/*": [
 				"./src/localization/*"
@@ -31,14 +28,8 @@
 			"@events/*": [
 				"src/services/events/*"
 			],
-			"@utils/*": [
-				"./src/utils/*"
-			],
 			"@commands/*": [
 				"src/services/commands/*"
-			],
-			"@svg/*": [
-				"./webview/js/icons/svg/*"
 			]
 		},
 		"baseUrl": "."
@@ -46,7 +37,7 @@
 	"include": [
 		"src/**/*",
 		"webview/js/icons/iconsManager.d.ts",
-		"webview/js/diagnosis/diagnosisManager.js",
+		"webview/js/diagnostics/diagnosticsManager.js",
 		"webview/js/tabs/tabManager.js",
 		"webview/js/gui/uiEffects.js",
 		"webview/js/icons/iconsManager.js",
@@ -54,8 +45,6 @@
 	],
 	"exclude": [
 		"node_modules",
-		".vscode-test",
-		"test-diagnosis.ts",
-		"test-diagnosis.js"
+		".vscode-test"
 	]
 }

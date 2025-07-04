@@ -8,7 +8,7 @@ import * as path from 'path';
 /**
  * Gestiona la carga y caché de iconos de archivos según el tema activo
  */
-export class IconManager {
+export class TabIconManager {
 	private _iconCache: Map<string, string> = new Map();
 	private _iconMap: Record<string, string> | undefined;
 	private _iconThemeId: string | undefined;
@@ -26,7 +26,7 @@ export class IconManager {
 		// Configurar listener para cambios en el tema de iconos
 		this._configListener = vscode.workspace.onDidChangeConfiguration(async e => {
 			if (e.affectsConfiguration('workbench.iconTheme')) {
-				console.log(`[LoverTab] Detectado cambio en tema de iconos`);
+				//console.log(`[SideTabs] Detectado cambio en tema de iconos`);
 				this.clearCache();
 				await this.buildIconMap(context);
 			}
@@ -37,7 +37,7 @@ export class IconManager {
 
 		// Construir el mapa de iconos inicialmente
 		this.buildIconMap(context).catch(err =>
-			console.error('[LoverTab] Error al construir mapa de iconos inicial:', err)
+			console.error('[SideTabs] Error al construir mapa de iconos inicial:', err)
 		);
 	}
 
@@ -52,11 +52,11 @@ export class IconManager {
 			const iconTheme = config.get<string>('workbench.iconTheme');
 
 			// Información de diagnóstico
-			console.log(`[LoverTab] Construyendo mapa de iconos... Tema actual: ${iconTheme || 'ninguno'}, Tema anterior: ${this._iconThemeId || 'ninguno'}, Forzar: ${forceRebuild}`);
+			//console.log(`[SideTabs] Construyendo mapa de iconos... Tema actual: ${iconTheme || 'ninguno'}, Tema anterior: ${this._iconThemeId || 'ninguno'}, Forzar: ${forceRebuild}`);
 
 			// Si no hay tema de iconos, usar iconos por defecto
 			if (!iconTheme) {
-				console.log('[LoverTab] No hay tema de iconos configurado, se usarán iconos por defecto');
+				//console.log('[SideTabs] No hay tema de iconos configurado, se usarán iconos por defecto');
 				this._iconMap = {};
 				this._iconThemeId = '';
 				return;
@@ -64,11 +64,11 @@ export class IconManager {
 
 			// Si ya tenemos el mapa construido para este tema y no se fuerza reconstrucción, salimos
 			if (this._iconThemeId === iconTheme && this._iconMap && !forceRebuild) {
-				console.log(`[LoverTab] Mapa de iconos para tema ${iconTheme} ya está construido`);
+				//console.log(`[SideTabs] Mapa de iconos para tema ${iconTheme} ya está construido`);
 				return;
 			}
 
-			console.log(`[LoverTab] Construyendo mapa de iconos para tema ${iconTheme}...`);
+			//console.log(`[SideTabs] Construyendo mapa de iconos para tema ${iconTheme}...`);
 
 			// Intentar cargar el tema especificado
 			let ext = this.findIconThemeExtension(iconTheme);
@@ -78,27 +78,27 @@ export class IconManager {
 
 			// Si no se encuentra el tema configurado, intentar con Seti como fallback
 			if (!ext) {
-				console.log(`[LoverTab] ERROR: No se encontró extensión para tema de iconos ${iconTheme}`);
-				console.log(`[LoverTab] Intentando fallback a tema Seti...`);
+				//console.log(`[SideTabs] ERROR: No se encontró extensión para tema de iconos ${iconTheme}`);
+				//console.log(`[SideTabs] Intentando fallback a tema Seti...`);
 
 				ext = this.findIconThemeExtension('vs-seti');
 				themeId = 'vs-seti';
 
 				if (!ext) {
-					console.log(`[LoverTab] ERROR: No se encontró el tema fallback Seti`);
-					console.log(`[LoverTab] Usando mapa de iconos vacío`);
+					//console.log(`[SideTabs] ERROR: No se encontró el tema fallback Seti`);
+					//console.log(`[SideTabs] Usando mapa de iconos vacío`);
 					this._iconMap = {};
 					this._iconThemeId = iconTheme; // Guardamos el ID para no intentar reconstruir constantemente
 					return;
 				}
 
-				console.log(`[LoverTab] Usando tema fallback: Seti`);
+				//console.log(`[SideTabs] Usando tema fallback: Seti`);
 			}
 
 			// Encontramos la contribución específica del tema
 			const themeContribution = ext.packageJSON.contributes.iconThemes.find((t: any) => t.id === themeId);
 			if (!themeContribution) {
-				console.log(`[LoverTab] ERROR: No se encontró contribución específica para tema ${themeId}`);
+				//console.log(`[SideTabs] ERROR: No se encontró contribución específica para tema ${themeId}`);
 				this._iconMap = {};
 				this._iconThemeId = iconTheme;
 				return;
@@ -106,10 +106,10 @@ export class IconManager {
 
 			// Construimos la ruta al archivo JSON del tema
 			themePath = path.join(ext.extensionPath, themeContribution.path);
-			console.log(`[LoverTab] Ruta al archivo de tema: ${themePath}`);
+			//console.log(`[SideTabs] Ruta al archivo de tema: ${themePath}`);
 
 			if (!fs.existsSync(themePath)) {
-				console.log(`[LoverTab] ERROR: No existe el archivo de tema ${themePath}`);
+				//console.log(`[SideTabs] ERROR: No existe el archivo de tema ${themePath}`);
 				this._iconMap = {};
 				this._iconThemeId = iconTheme;
 				return;
@@ -119,9 +119,9 @@ export class IconManager {
 			try {
 				const themeContent = fs.readFileSync(themePath, 'utf8');
 				themeJson = JSON.parse(themeContent);
-				console.log(`[LoverTab] JSON del tema cargado correctamente (${themeContent.length} bytes)`);
+				//console.log(`[SideTabs] JSON del tema cargado correctamente (${themeContent.length} bytes)`);
 			} catch (err) {
-				console.error(`[LoverTab] Error al parsear JSON del tema:`, err);
+				console.error(`[SideTabs] Error al parsear JSON del tema:`, err);
 				this._iconMap = {};
 				this._iconThemeId = iconTheme;
 				return;
@@ -149,7 +149,7 @@ export class IconManager {
 					iconMap[`ext:${extLower}`] = value as string;
 					// Log especial para extensiones JS y TS para diagnóstico
 					if (extLower === 'js' || extLower === 'ts') {
-						console.log(`[LoverTab] Registrando extensión ${extLower} con valor ${value}`);
+						//console.log(`[SideTabs] Registrando extensión ${extLower} con valor ${value}`);
 					}
 				});
 			}
@@ -163,16 +163,16 @@ export class IconManager {
 
 			// Guardar el mapa completo
 			this._iconMap = iconMap;
-			console.log(`[LoverTab] Mapa de iconos construido con ${Object.keys(iconMap).length} entradas`);
+			//console.log(`[SideTabs] Mapa de iconos construido con ${Object.keys(iconMap).length} entradas`);
 
 			// Imprimir algunas muestras para diagnóstico
 			const mapSamples = Object.keys(iconMap).slice(0, 5);
-			console.log(`[LoverTab] Primeros 5 elementos del mapa:`, mapSamples.map(k => `${k} -> ${iconMap[k]}`));
+			//console.log(`[SideTabs] Primeros 5 elementos del mapa:`, mapSamples.map(k => `${k} -> ${iconMap[k]}`));
 		} catch (error) {
-			console.error('[LoverTab] Error al construir mapa de iconos:', error);
+			console.error('[SideTabs] Error al construir mapa de iconos:', error);
 			if (error instanceof Error) {
-				console.error(`[LoverTab] Detalles: ${error.message}`);
-				console.error(`[LoverTab] Stack: ${error.stack}`);
+				console.error(`[SideTabs] Detalles: ${error.message}`);
+				console.error(`[SideTabs] Stack: ${error.stack}`);
 			}
 			// Asegurar que tengamos un mapa aunque sea vacío
 			this._iconMap = this._iconMap || {};
@@ -183,7 +183,7 @@ export class IconManager {
 	 * Encuentra la extensión que provee un tema de iconos
 	 */
 	private findIconThemeExtension(themeId: string): vscode.Extension<any> | undefined {
-		console.log(`[LoverTab] Buscando extensión para tema ${themeId} entre ${vscode.extensions.all.length} extensiones`);
+		//console.log(`[SideTabs] Buscando extensión para tema ${themeId} entre ${vscode.extensions.all.length} extensiones`);
 
 		return vscode.extensions.all.find(e => {
 			try {
@@ -192,12 +192,12 @@ export class IconManager {
 
 				const hasTheme = contributes.iconThemes.some((t: any) => t.id === themeId);
 				if (hasTheme) {
-					console.log(`[LoverTab] Encontrada extensión para tema ${themeId}: ${e.id}`);
+					//console.log(`[SideTabs] Encontrada extensión para tema ${themeId}: ${e.id}`);
 					return true;
 				}
 				return false;
 			} catch (err) {
-				console.log(`[LoverTab] Error al evaluar extensión ${e.id}:`, err);
+				//console.log(`[SideTabs] Error al evaluar extensión ${e.id}:`, err);
 				return false;
 			}
 		});
@@ -212,18 +212,18 @@ export class IconManager {
 			if (!this._iconMap || !this._iconThemeJson) {
 				// Solo construir si no se ha inicializado aún
 				if (!this._iconThemeId) {
-					console.log('[LoverTab] Construyendo mapa de iconos bajo demanda');
+					//console.log('[SideTabs] Construyendo mapa de iconos bajo demanda');
 					await this.buildIconMap(context);
 				}
 				if (!this._iconMap || !this._iconThemeJson) {
-					console.log('[LoverTab] No se pudo construir el mapa de iconos');
+					//console.log('[SideTabs] No se pudo construir el mapa de iconos');
 					return undefined;
 				}
 			}
 
 			const themeJson = this._iconThemeJson;
 			const fileNameLower = fileName.toLowerCase();
-			
+
 			// Obtener la extensión correctamente
 			// Para archivos como "archivo.min.js", debemos obtener "js" como extensión, no "min.js"
 			const lastDotIndex = fileNameLower.lastIndexOf('.');
@@ -231,7 +231,7 @@ export class IconManager {
 
 			// Clave de caché para este archivo/lenguaje
 			const cacheKey = `${fileNameLower}|${languageId || ''}`;
-			console.log(`[LoverTab] Buscando icono para ${fileName} (ext: "${extName}", lang: ${languageId || 'sin lenguaje'})`);
+			//console.log(`[SideTabs] Buscando icono para ${fileName} (ext: "${extName}", lang: ${languageId || 'sin lenguaje'})`);
 
 			// Verificar si ya tenemos la ruta en caché
 			let iconPath = this._iconPathCache.get(cacheKey);
@@ -243,19 +243,19 @@ export class IconManager {
 				// Intentar primero por nombre exacto del archivo
 				if (this._iconMap[`name:${fileNameLower}`]) {
 					iconId = this._iconMap[`name:${fileNameLower}`];
-					console.log(`[LoverTab] Encontrado icono por nombre exacto: ${iconId}`);
-				} 
+					//console.log(`[SideTabs] Encontrado icono por nombre exacto: ${iconId}`);
+				}
 				// Luego por extensión
 				else if (extName && this._iconMap[`ext:${extName}`]) {
 					iconId = this._iconMap[`ext:${extName}`];
-					console.log(`[LoverTab] Encontrado icono por extensión '${extName}': ${iconId}`);
-				} 
+					//console.log(`[SideTabs] Encontrado icono por extensión '${extName}': ${iconId}`);
+				}
 				// Finalmente por lenguaje
 				else if (languageId && this._iconMap[`lang:${languageId.toLowerCase()}`]) {
 					iconId = this._iconMap[`lang:${languageId.toLowerCase()}`];
-					console.log(`[LoverTab] Encontrado icono por lenguaje '${languageId}': ${iconId}`);
+					//console.log(`[SideTabs] Encontrado icono por lenguaje '${languageId}': ${iconId}`);
 				}
-				
+
 				// Verificación específica para JS y TS
 				// Verificación específica para JS, TS y otros lenguajes populares que puedan tener problemas
 				if (!iconId) {
@@ -274,39 +274,39 @@ export class IconManager {
 							'html': 'html',
 							'css': 'css'
 						};
-						
+
 						inferredLanguageId = extensionToLanguageMap[extName];
 						if (inferredLanguageId) {
-							console.log(`[LoverTab] LanguageId inferido para ${extName}: ${inferredLanguageId}`);
+							//console.log(`[SideTabs] LanguageId inferido para ${extName}: ${inferredLanguageId}`);
 						}
 					}
-					
+
 					// Intentar buscar por languageId inferido
 					if (inferredLanguageId && this._iconMap[`lang:${inferredLanguageId.toLowerCase()}`]) {
 						iconId = this._iconMap[`lang:${inferredLanguageId.toLowerCase()}`];
-						console.log(`[LoverTab] Encontrado icono usando languageId inferido ${inferredLanguageId}: ${iconId}`);
-					} 
+						//console.log(`[SideTabs] Encontrado icono usando languageId inferido ${inferredLanguageId}: ${iconId}`);
+					}
 					// Para JS/TS específicamente, usar un método dedicado
 					else if (extName === 'js' || extName === 'ts' || extName === 'jsx' || extName === 'tsx') {
 						const jstsIconId = this.getJavaScriptTypeScriptIconId(fileNameLower, extName);
 						if (jstsIconId) {
 							iconId = jstsIconId;
-							console.log(`[LoverTab] Encontrado icono específico para ${extName}: ${iconId}`);
+							//console.log(`[SideTabs] Encontrado icono específico para ${extName}: ${iconId}`);
 						}
 					}
-					
+
 					// Diagnóstico de claves disponibles
 					if (!iconId && (extName === 'js' || extName === 'ts')) {
-						console.log(`[LoverTab] Diagnóstico de iconos para ${extName}...`);
+						//console.log(`[SideTabs] Diagnóstico de iconos para ${extName}...`);
 						const allKeys = Object.keys(this._iconMap);
-						const relevantKeys = allKeys.filter(k => 
-							k.includes('javascript') || 
-							k.includes('typescript') || 
-							k.includes('js') || 
+						const relevantKeys = allKeys.filter(k =>
+							k.includes('javascript') ||
+							k.includes('typescript') ||
+							k.includes('js') ||
 							k.includes('ts')
 						);
-						
-						console.log(`[LoverTab] Claves relevantes: ${relevantKeys.join(', ')}`);
+
+						//console.log(`[SideTabs] Claves relevantes: ${relevantKeys.join(', ')}`);
 					}
 				}
 
@@ -329,27 +329,27 @@ export class IconManager {
 
 				// Si no encontramos un iconId, no hay icono
 				if (!iconId || !themeJson.iconDefinitions) {
-					console.log(`[LoverTab] No se encontró iconId para ${fileName}`);
+					//console.log(`[SideTabs] No se encontró iconId para ${fileName}`);
 					return undefined;
 				}
 
 				// Obtener la definición del icono
 				const iconDef = themeJson.iconDefinitions[iconId];
 				if (!iconDef) {
-					console.log(`[LoverTab] No se encontró definición de icono para ${iconId}`);
+					//console.log(`[SideTabs] No se encontró definición de icono para ${iconId}`);
 					return undefined;
 				}
 
 				// Obtener la ruta al icono
 				iconPath = iconDef.iconPath || iconDef.path;
 				if (!iconPath) {
-					console.log(`[LoverTab] No se encontró ruta de icono para ${iconId}`);
+					//console.log(`[SideTabs] No se encontró ruta de icono para ${iconId}`);
 					return undefined;
 				}
 
 				// Guardar en caché para uso futuro
 				this._iconPathCache.set(cacheKey, iconPath);
-				console.log(`[LoverTab] Encontrado iconPath para ${fileName}: ${iconPath}`);
+				//console.log(`[SideTabs] Encontrado iconPath para ${fileName}: ${iconPath}`);
 			}
 
 			// Construir la ruta absoluta al archivo de icono 
@@ -365,20 +365,20 @@ export class IconManager {
 			// Resolver la ruta absoluta
 			const absIconPath = path.resolve(iconThemeDir, normalizedIconPath);
 
-			console.log(`[LoverTab] Ruta absoluta al icono: ${absIconPath}`);
-			console.log(`[LoverTab] Ruta base del tema: ${iconThemeDir}`);
-			console.log(`[LoverTab] Ruta relativa del icono: ${normalizedIconPath}`);
+			////console.log(`[SideTabs] Ruta absoluta al icono: ${absIconPath}`);
+			////console.log(`[SideTabs] Ruta base del tema: ${iconThemeDir}`);
+			////console.log(`[SideTabs] Ruta relativa del icono: ${normalizedIconPath}`);
 
 			// Verificar que el archivo existe
 			if (!fs.existsSync(absIconPath)) {
-				console.log(`[LoverTab] El archivo de icono no existe: ${absIconPath}`);
+				////console.log(`[SideTabs] El archivo de icono no existe: ${absIconPath}`);
 
 				// Intento alternativo: usar join en lugar de resolve
 				const altPath = path.join(iconThemeDir, normalizedIconPath);
-				console.log(`[LoverTab] Intentando ruta alternativa: ${altPath}`);
+				////console.log(`[SideTabs] Intentando ruta alternativa: ${altPath}`);
 
 				if (fs.existsSync(altPath)) {
-					console.log(`[LoverTab] Se encontró el icono en la ruta alternativa`);
+					//console.log(`[SideTabs] Se encontró el icono en la ruta alternativa`);
 					// Usar esta ruta alternativa
 					return this.readIconAndConvertToBase64(altPath);
 				}
@@ -389,11 +389,11 @@ export class IconManager {
 			// Leer el archivo y convertir a base64
 			return this.readIconAndConvertToBase64(absIconPath, fileName);
 		} catch (e) {
-			console.error(`[LoverTab] Error al obtener icono para ${fileName}:`, e);
+			//console.error(`[SideTabs] Error al obtener icono para ${fileName}:`, e);
 			// Mostrar más detalles del error para diagnóstico
 			if (e instanceof Error) {
-				console.error(`[LoverTab] Detalles: ${e.message}`);
-				console.error(`[LoverTab] Stack: ${e.stack}`);
+				//console.error(`[SideTabs] Detalles: ${e.message}`);
+				//console.error(`[SideTabs] Stack: ${e.stack}`);
 			}
 			return undefined;
 		}
@@ -406,23 +406,23 @@ export class IconManager {
 	 */
 	private getJavaScriptTypeScriptIconId(fileName: string, ext: string): string | undefined {
 		if (!this._iconMap || !this._iconThemeJson) return undefined;
-		
+
 		// Mapeo específico de extensiones a languageIds según VS Code
 		if (ext === 'js') {
-			console.log(`[LoverTab] Buscando icono específico para JavaScript`);
+			////console.log(`[SideTabs] Buscando icono específico para JavaScript`);
 			// Intentar buscar por languageId en lugar de extensión
 			return this._iconMap['lang:javascript'] || this._iconMap['ext:js'];
 		} else if (ext === 'ts') {
-			console.log(`[LoverTab] Buscando icono específico para TypeScript`);
+			////console.log(`[SideTabs] Buscando icono específico para TypeScript`);
 			return this._iconMap['lang:typescript'] || this._iconMap['ext:ts'];
 		} else if (ext === 'jsx') {
-			console.log(`[LoverTab] Buscando icono específico para JSX`);
+			////console.log(`[SideTabs] Buscando icono específico para JSX`);
 			return this._iconMap['lang:javascriptreact'] || this._iconMap['ext:jsx'];
 		} else if (ext === 'tsx') {
-			console.log(`[LoverTab] Buscando icono específico para TSX`);
+			//	//console.log(`[SideTabs] Buscando icono específico para TSX`);
 			return this._iconMap['lang:typescriptreact'] || this._iconMap['ext:tsx'];
 		}
-		
+
 		return undefined;
 	}
 
@@ -479,7 +479,7 @@ export class IconManager {
 								}
 							}
 						} catch (error) {
-							console.error(`[LoverTab] Error al precargar icono para ${fileName}:`, error);
+							console.error(`[SideTabs] Error al precargar icono para ${fileName}:`, error);
 						}
 					};
 
@@ -520,7 +520,7 @@ export class IconManager {
 	private readIconAndConvertToBase64(iconPath: string, fileName?: string): string | undefined {
 		try {
 			if (!fs.existsSync(iconPath)) {
-				console.log(`[LoverTab] El archivo de icono no existe: ${iconPath}`);
+				//console.log(`[SideTabs] El archivo de icono no existe: ${iconPath}`);
 				return undefined;
 			}
 
@@ -531,15 +531,15 @@ export class IconManager {
 			const dataUri = `data:${mimeType};base64,${base64Data}`;
 
 			if (fileName) {
-				console.log(`[LoverTab] Icono generado con éxito para ${fileName}`);
+				//console.log(`[SideTabs] Icono generado con éxito para ${fileName}`);
 			} else {
-				console.log(`[LoverTab] Icono generado con éxito desde ${iconPath}`);
+				//console.log(`[SideTabs] Icono generado con éxito desde ${iconPath}`);
 			}
 			return dataUri;
 		} catch (e) {
-			console.error(`[LoverTab] Error al leer icono desde ${iconPath}:`, e);
+			console.error(`[SideTabs] Error al leer icono desde ${iconPath}:`, e);
 			if (e instanceof Error) {
-				console.error(`[LoverTab] Detalles: ${e.message}`);
+				console.error(`[SideTabs] Detalles: ${e.message}`);
 			}
 			return undefined;
 		}

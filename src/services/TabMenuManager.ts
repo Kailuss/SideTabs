@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Localization } from '../localization/Localization';
 
 //· Gestiona los comandos y menús contextuales de las pestañas 
-export class CommandManager {
+export class TabMenuManager {
 
 	/// Establece la referencia al proveedor
 	private provider?: any;
@@ -51,10 +51,10 @@ export class CommandManager {
 			try {
 				this.provider._view.webview.postMessage(message);
 			} catch (error) {
-				console.error('[LoverTab] Error enviando mensaje al webview:', error);
+				console.error('[SideTabs] Error enviando mensaje al webview:', error);
 			}
 		} else {
-			console.warn('[LoverTab] No se puede enviar mensaje - proveedor no disponible');
+			console.warn('[SideTabs] No se puede enviar mensaje - proveedor no disponible');
 		}
 	}
 
@@ -63,7 +63,7 @@ export class CommandManager {
 		context.subscriptions.push(
 
 			//* Muestra el menú contextual de la pestaña activa
-			vscode.commands.registerCommand('lovertab.showTabMenu', async () => {
+			vscode.commands.registerCommand('sidetabs.showTabMenu', async () => {
 				// Este comando se puede usar para mostrar el menú manualmente
 				const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
 				if (activeTab && this.provider) {
@@ -72,7 +72,7 @@ export class CommandManager {
 			}),
 
 			//* Cierra la pestaña activa
-			vscode.commands.registerCommand('lovertab.closeTab', async () => {
+			vscode.commands.registerCommand('sidetabs.closeTab', async () => {
 				const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
 				if (activeTab) {
 					await vscode.window.tabGroups.close(activeTab);
@@ -80,7 +80,7 @@ export class CommandManager {
 			}),
 
 			//* Cierra todas las pestañas
-			vscode.commands.registerCommand('lovertab.closeAllTabs', async () => {
+			vscode.commands.registerCommand('sidetabs.closeAllTabs', async () => {
 				for (const group of vscode.window.tabGroups.all) {
 					for (const tab of group.tabs) {
 						await vscode.window.tabGroups.close(tab);
@@ -89,7 +89,7 @@ export class CommandManager {
 			}),
 
 			//* Cierra otras pestañas
-			vscode.commands.registerCommand('lovertab.closeOtherTabs', async () => {
+			vscode.commands.registerCommand('sidetabs.closeOtherTabs', async () => {
 				const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
 				if (activeTab) {
 					for (const group of vscode.window.tabGroups.all) {

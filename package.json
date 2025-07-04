@@ -2,7 +2,7 @@
 	"name": "sidetabs",
 	"displayName": "SideTabs",
 	"description": "%sidetabs.description%",
-	"version": "0.7.3",
+	"version": "0.7.5preview",
 	"publisher": "Lovervoid",
 	"icon": "sidetabs.png",
 	"engines": {

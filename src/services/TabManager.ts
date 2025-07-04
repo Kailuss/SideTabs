@@ -8,12 +8,24 @@ export interface TabInfo {
 	group: vscode.TabGroup;
 	languageId?: string;
 	uniqueId: string; // Identificador único para la pestaña
+	resourceUri?: vscode.Uri; // URI del recurso asociado a la pestaña
 }
 
 //· Gestiona el orden personalizado y la lógica de las pestañas
 
 export class TabManager {
 	private customOrder: string[] = [];
+
+	/// Obtiene una pestaña por su URI
+	public getTabByUri(uri: vscode.Uri): TabInfo | undefined {
+		const allTabs = this.getAllTabsWithMetadata();
+		return allTabs.find(tab => {
+			if (tab.tab.input instanceof vscode.TabInputText) {
+				return tab.tab.input.uri.toString() === uri.toString();
+			}
+			return false;
+		});
+	}
 
 	/// Genera un identificador único para una pestaña basado en su URI y posición
 	private generateUniqueId(tab: vscode.Tab, group: vscode.TabGroup): string {
@@ -40,40 +52,40 @@ export class TabManager {
 		for (const group of tabGroups) {
 			for (const tab of group.tabs) {
 				let languageId: string | undefined = undefined;
+				let resourceUri: vscode.Uri | undefined = undefined;
+
 				// Si la pestaña es de tipo texto, obtenemos el languageId del documento
-				// Si no, lo dejamos como undefined
 				if (tab.input instanceof vscode.TabInputText) {
 					const input = tab.input as vscode.TabInputText;
+					resourceUri = input.uri;
 					const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === input.uri.toString());
 					if (doc) {
 						languageId = doc.languageId;
 					}
 				}
 
-				// Generar un identificador único para la pestaña
-				// Basado en su URI o label si no tiene URI
-				const uniqueId = this.generateUniqueId(tab, group);
-				allTabs.push({ tab, group, languageId, uniqueId });
-
-				// Añadir al orden personalizado si no está (ahora usando uniqueId)
-				if (!this.customOrder.includes(uniqueId)) {
-					this.customOrder.push(uniqueId);
-				}
+				allTabs.push({
+					tab,
+					group,
+					languageId,
+					resourceUri,
+					uniqueId: this.generateUniqueId(tab, group)
+				});
 			}
 		}
 
-		//* Borra del orden personalizado las pestañas que ya no existen
-		this.customOrder = this.customOrder.filter(uniqueId =>
-			allTabs.some(item => item.uniqueId === uniqueId)
-		);
+		//* Ordenar según el orden personalizado si existe
+		if (this.customOrder.length > 0) {
+			allTabs.sort((a, b) => {
+				const indexA = this.customOrder.indexOf(a.uniqueId);
+				const indexB = this.customOrder.indexOf(b.uniqueId);
+				if (indexA === -1 && indexB === -1) return 0;
+				if (indexA === -1) return 1;
+				if (indexB === -1) return -1;
+				return indexA - indexB;
+			});
+		}
 
-		//* Ordena las pestañas según el orden personalizado
-		allTabs.sort((a, b) => {
-			const indexA = this.customOrder.indexOf(a.uniqueId);
-			const indexB = this.customOrder.indexOf(b.uniqueId);
-			return indexA - indexB;
-		});
-		console.log('[TabManager] Tabs retornadas:', allTabs.map(t => t.uniqueId));
 		return allTabs;
 	}
 
@@ -97,13 +109,13 @@ export class TabManager {
 	public moveTab(sourceUniqueId: string, targetUniqueId?: string, position?: 'before' | 'after'): boolean {
 		//* Validar IDs primero
 		if (!sourceUniqueId) {
-			console.error('[LoverTab] moveTab: sourceUniqueId is required');
+			console.error('[SideTabs] moveTab: sourceUniqueId is required');
 			return false;
 		}
 
 		const sourceIndex = this.customOrder.indexOf(sourceUniqueId);
 		if (sourceIndex === -1) {
-			console.warn(`[LoverTab] No se encontró pestaña source con ID: ${sourceUniqueId}`);
+			console.warn(`[SideTabs] No se encontró pestaña source con ID: ${sourceUniqueId}`);
 			return false;
 		}
 
@@ -125,10 +137,10 @@ export class TabManager {
 					const validIndex = Math.min(Math.max(0, newIndex), this.customOrder.length);
 					this.customOrder.splice(validIndex, 0, sourceUniqueId);
 
-					console.log(`[LoverTab] Pestaña movida a posición ${position} de ${targetUniqueId} (índice ${validIndex})`);
+					console.log(`[SideTabs] Pestaña movida a posición ${position} de ${targetUniqueId} (índice ${validIndex})`);
 					return true;
 				} else {
-					console.warn(`[LoverTab] No se encontró pestaña target con ID: ${targetUniqueId}`);
+					console.warn(`[SideTabs] No se encontró pestaña target con ID: ${targetUniqueId}`);
 					// Si no existe el target, reinsertar en la posición original
 					this.customOrder.splice(sourceIndex, 0, sourceUniqueId);
 					return false;
@@ -140,7 +152,7 @@ export class TabManager {
 			}
 		} catch (error) {
 			// Restaurar el orden anterior en caso de error
-			console.error('[LoverTab] Error al mover pestaña:', error);
+			console.error('[SideTabs] Error al mover pestaña:', error);
 			this.customOrder = previousOrder;
 			return false;
 		}

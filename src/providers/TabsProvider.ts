@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { TabManager } from '../services/TabManager';
 import { GUIManager } from '../services/GUIManager';
-import { IconManager } from '../services/IconManager';
-import { DiagnosisManager } from '../services/DiagnosisManager';
-import { CommandManager } from '../services/CommandManager';
+import { TabIconManager } from '../services/TabIconManager';
+import { TabDiagnosticsManager } from '../services/TabDiagnosticsManager';
+import { TabMenuManager } from '../services/TabMenuManager';
 import { EventManager } from '../services/EventManager';
 import { initSvgIconUris } from '../services/utils/iconsUtils';
 
@@ -17,13 +17,13 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 	private _context: vscode.ExtensionContext | undefined;
 	private _view: vscode.WebviewView | undefined;
 	private _stylesInitialized: boolean = false;
-	private readonly _consoleId: string = "[LoverTab | TabsProvider] ";
+	private readonly _consoleId: string = "[SideTabs] TabsProvider.ts: ";
 
 	// Managers para diferentes aspectos de la funcionalidad
-	private iconManager: IconManager;
-	private diagnosisManager: DiagnosisManager;
+	private iconManager: TabIconManager;
+	private tabDiagnosticsManager: TabDiagnosticsManager | undefined = undefined;
 	private tabManager: TabManager;
-	private commandManager: CommandManager;
+	private commandManager: TabMenuManager;
 	private guiManager: GUIManager;
 	private eventManager: EventManager;
 
@@ -35,18 +35,18 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 	private pendingUpdate: boolean = false;
 	private lastActiveTabId: string | undefined;
 	private lastTabsMap: Map<string, any> | undefined;
-	private lastDiagnosisMap: Map<string, any> | undefined;
+	private lastDiagnosticsMap: Map<string, any> | undefined;
 
 	constructor(extensionUri: vscode.Uri, context?: vscode.ExtensionContext) {
 		this._extensionUri = extensionUri;
 		if (context) this._context = context;
 
 		//* Inicializar managers
-		this.iconManager = new IconManager();
-		this.diagnosisManager = new DiagnosisManager();
+		this.iconManager = new TabIconManager();
+		this.tabDiagnosticsManager = new TabDiagnosticsManager();
 		this.tabManager = new TabManager();
-		this.commandManager = new CommandManager();
-		this.guiManager = new GUIManager(this.iconManager, this.diagnosisManager);
+		this.commandManager = new TabMenuManager();
+		this.guiManager = new GUIManager(this.iconManager, this.tabDiagnosticsManager);
 		this.eventManager = new EventManager(this.tabManager, this.commandManager, this);
 	}
 
@@ -87,7 +87,7 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		this._stylesInitialized = false;
 		this.lastActiveTabId = undefined;
 		this.lastTabsMap = undefined;
-		this.lastDiagnosisMap = undefined;
+		this.lastDiagnosticsMap = undefined;
 		this.isUpdating = false;
 		this.pendingUpdate = false;
 
@@ -104,25 +104,26 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 
 		};
 
-		// Configurar listeners usando el EventManager
+		//· Configurar listeners usando el EventManager
+		console.log(`[SideTabs] TabsProvider.ts: Configurando listeners para el webview`);
 		this.eventManager.setupEventListeners(
 			webviewView,
-			this.diagnosisManager,
-			(fast: boolean) => this.scheduleUpdate(false, !fast, fast ? 50 : undefined),
-			() => this.scheduleDiagnosisUpdate()
-		);
-
-		// Manejar mensajes del webview
-		webviewView.webview.onDidReceiveMessage(message => {
-			console.log(this._consoleId + 'Mensaje recibido del webview:', message);
-
-			// Si el webview reporta error de estilos, intentar recargar
-			if (message.command === 'styles.error' || message.command === 'webview.reload') {
-				console.log(this._consoleId + 'Solicitud de recarga del webview');
-				this._stylesInitialized = false; // Forzar reinicialización completa
-				this.performUpdate(true);
+			this.tabDiagnosticsManager,
+			(fast: boolean) => this.updateActiveTabState(),
+			(uris?: vscode.Uri[]) => {
+				console.log(this._consoleId + `Evento de diagnósticos detectado. URIs afectadas: ${uris?.length ?? 'todas'}`);
+				if (uris && uris.length > 0) {
+					this.scheduleDiagnosisUpdate(uris);
+				} else {
+					// Si no hay URIs específicas, actualizar todos los diagnósticos
+					const allTabs = this.tabManager.getAllTabsWithMetadata();
+					const allUris = allTabs
+						.filter(tab => tab.resourceUri)
+						.map(tab => tab.resourceUri!);
+					this.scheduleDiagnosisUpdate(allUris);
+				}
 			}
-		});
+		);
 
 		// Inicializar SVG para iconos
 		initSvgIconUris(this._context!, webviewView.webview); // Solo necesitas llamarlo una vez aquí
@@ -131,27 +132,8 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		this.performUpdate(true);
 	}
 
-
-
-	/**
-	 * Configura las opciones del webview
-	 */
-	private setupWebviewOptions(webviewView: vscode.WebviewView): void {
-		const iconsDir = vscode.Uri.joinPath(this._context!.globalStorageUri, 'icons');
-		webviewView.webview.options = {
-			enableScripts: true,
-			localResourceRoots: [
-				this._extensionUri,
-				vscode.Uri.joinPath(this._extensionUri, 'webview'),
-				iconsDir
-			]
-		};
-	}
-
-	/**
-	 * Actualiza solo el estado activo de las pestañas sin regenerar todo el HTML
-	 * Con throttling mínimo para máxima fluidez
-	 */
+	/// Actualiza solo el estado activo de las pestañas sin regenerar todo el HTML
+	/// Con throttling mínimo para máxima fluidez
 	private scheduleActiveTabUpdate(): void {
 		// Cancelar timeout previo si existe
 		if (this.activeTabUpdateTimeout) {
@@ -164,14 +146,13 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		}, 10);
 	}
 
-	/**
-	 * Actualiza solo el estado activo de las pestañas sin regenerar todo el HTML
-	 */
+	//· Actualiza solo el estado activo de las pestañas sin regenerar todo el HTML
 	private updateActiveTabState(): boolean {
+		console.log('updateActiveTabState llamado 🔁');
 		if (!this._view) return false;
 
 		const allTabs = this.tabManager.getAllTabsWithMetadata();
-		console.log('Tabs realmente abiertas:', allTabs.map(t => t.uniqueId));
+		//console.log('Tabs realmente abiertas:', allTabs.map(t => t.uniqueId));
 		const currentActiveTab = allTabs.find((tab: any) => tab.tab.isActive);
 		const currentActiveTabId = currentActiveTab?.uniqueId;
 
@@ -239,15 +220,13 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		return false; // Solo cambió el estado activo
 	}
 
-	/**
-	 * Actualiza la vista con detección inteligente de cambios
-	 */
+	/// Actualiza la vista con detección inteligente de cambios
 	private scheduleUpdate(forceIconRefresh: boolean = false, forceFullUpdate: boolean = false, customDebounce?: number): void {
-		console.log(this._consoleId + `scheduleUpdate llamado con forceIconRefresh=${forceIconRefresh}, forceFullUpdate=${forceFullUpdate}, customDebounce=${customDebounce}`);
+		//console.log(this._consoleId + `scheduleUpdate llamado con forceIconRefresh=${forceIconRefresh}, forceFullUpdate=${forceFullUpdate}, customDebounce=${customDebounce}`);
 
 		// Si se fuerza actualización completa, saltar optimizaciones
 		if (forceFullUpdate || forceIconRefresh) {
-			console.log(this._consoleId + 'Programando actualización completa por forzado');
+			//console.log(this._consoleId + 'Programando actualización completa por forzado');
 			this.scheduleFullUpdate(forceIconRefresh, customDebounce);
 			return;
 		}
@@ -257,14 +236,12 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 
 		// Verificar si necesitamos actualización completa
 		if (this.needsFullUpdate()) {
-			console.log(this._consoleId + 'Programando actualización completa por cambios estructurales');
+			//console.log(this._consoleId + 'Programando actualización completa por cambios estructurales');
 			this.scheduleFullUpdate(forceIconRefresh, customDebounce);
 		}
 	}
 
-	/**
-	 * Programa una actualización completa del webview
-	 */
+	/// Programa una actualización completa del webview
 	private scheduleFullUpdate(forceIconRefresh: boolean = false, customDebounce?: number): void {
 		// Si ya hay una actualización programada, cancelarla
 		if (this.updateTimeout) {
@@ -286,53 +263,19 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		}, debounceTime);
 	}
 
-	/**
-	 * Programa actualizaciones de diagnósticos con menor debouncing
-	 * Delega la generación de datos al DiagnosisManager
-	 */
-	private scheduleDiagnosisUpdate(): void {
-		// Si ya hay una actualización de diagnósticos programada, cancelarla
-		if (this.diagnosisTimeout) {
-			clearTimeout(this.diagnosisTimeout);
-		}
+	/// Programa actualizaciones de diagnósticos con menor debouncing
+	/// Delega la generación de datos al DiagnosisManager
+	private scheduleDiagnosisUpdate(uris?: vscode.Uri[]) {
+		if (!this._view?.visible) return;
 
-		// Programar actualización reactiva de diagnósticos con un tiempo muy corto
-		this.diagnosisTimeout = setTimeout(async () => {
-			try {
-				// Si no hay vista activa, actualizar toda la vista
-				if (!this._view || !this._view.visible || !this._view.webview) {
-					this.scheduleUpdate(false, false);
-					return;
-				}
-				console.log(this._consoleId + 'Actualizando diagnósticos inmediatamente...');
+		if (this.diagnosisTimeout) { clearTimeout(this.diagnosisTimeout); }
 
-				// Obtener todas las pestañas con metadatos
-				const allTabs = this.tabManager.getAllTabsWithMetadata();
-				// Delegar la generación de datos al DiagnosisManager
-				const diagnosisUpdates = await this.diagnosisManager.generateDiagnosisUpdates(allTabs);
-				// Actualizar el mapa de diagnósticos para comparaciones futuras
-				const currentDiagnosisMap = new Map(diagnosisUpdates.map(p => [p.uniqueId, p.diagnosis]));
-				this.lastDiagnosisMap = currentDiagnosisMap;
-
-				// Enviar actualización reactiva si hay diagnósticos para actualizar
-				if (diagnosisUpdates.length > 0 && this._view && this._view.webview) {
-					console.log(this._consoleId + 'Enviando actualizaciones de diagnósticos al webview con comando correcto');
-					this._view?.webview.postMessage({
-						command: 'updateDiagnosis',
-						updates: diagnosisUpdates
-					});
-				}
-			} catch (error) {
-				console.error(this._consoleId + 'Error al actualizar diagnósticos:', error);
-				// En caso de error, caer de nuevo al método tradicional
-				this.scheduleUpdate(false, false);
-			}
-		}, 50); // Reducimos drásticamente el debounce para obtener una actualización casi inmediata
+		this.diagnosisTimeout = setTimeout(() => {
+			this.updateDiagnostics(uris);
+		}, 100); // Pequeño debounce para evitar actualizaciones muy frecuentes
 	}
 
-	/**
-	 * Genera el HTML completo para el webview, delegando a UIManager
-	 */
+	/// Genera el HTML completo para el webview, delegando a UIManager
 	private async generateFullHtml(forceIconRefresh: boolean = false): Promise<string> {
 		// Obtener todas las pestañas con metadatos
 		const allTabs = this.tabManager.getAllTabsWithMetadata();
@@ -360,9 +303,7 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	/**
-	 * Realiza la actualización real de la vista
-	 */
+	/// Realiza la actualización real de la vista
 	private async performUpdate(forceIconRefresh: boolean = false): Promise<void> {
 		try {
 			this.isUpdating = true;
@@ -409,9 +350,61 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	/**
-	 * Añade languageId a los tabs si falta
-	 */
+	/// Envía actualizaciones de diagnósticos al webview
+	/// @param diagnosticsMap - Mapa de diagnósticos por URI
+	private sendDiagnosticsUpdate(diagnosticsMap: Map<string, any>) {
+		if (!this._view?.visible) return;
+
+		console.log(this._consoleId + "Enviando actualizaciones de diagnósticos al webview con comando correcto");
+
+		// Convertir el mapa a un objeto para enviar al webview
+		const diagnostics: { [key: string]: any } = {};
+		for (const [uri, diag] of diagnosticsMap.entries()) {
+			// Obtener el ID único de la pestaña desde la URI
+			const tab = this.tabManager.getTabByUri(vscode.Uri.parse(uri));
+			if (tab) {
+				diagnostics[tab.uniqueId] = diag;
+			}
+		}
+
+		// Enviar el mensaje al webview
+		this._view.webview.postMessage({
+			type: 'updateDiagnostics',
+			diagnostics
+		});
+	}
+
+	/// Actualiza los diagnósticos y los envía al webview
+	private async updateDiagnostics(uris?: vscode.Uri[]) {
+		if (!this._view?.visible) return;
+
+		// Si se proporcionaron URIs específicas, actualizar solo esas
+		if (uris && uris.length > 0) {
+			const diagnosticsMap = new Map<string, any>();
+			for (const uri of uris) {
+				if (this.tabDiagnosticsManager) {
+					const diagnosis = await this.tabDiagnosticsManager.getDiagnostics(uri);
+					diagnosticsMap.set(uri.toString(), diagnosis);
+				}
+			}
+			this.sendDiagnosticsUpdate(diagnosticsMap);
+		} else {
+			// Actualizar todos los diagnósticos
+			const allTabs = this.tabManager.getAllTabsWithMetadata();
+			const diagnosticsMap = new Map<string, any>();
+
+			for (const tab of allTabs) {
+				if (tab.resourceUri && this.tabDiagnosticsManager) {
+					const diagnosis = await this.tabDiagnosticsManager.getDiagnostics(tab.resourceUri);
+					diagnosticsMap.set(tab.resourceUri.toString(), diagnosis);
+				}
+			}
+
+			this.sendDiagnosticsUpdate(diagnosticsMap);
+		}
+	}
+
+	/// Añade languageId a los tabs si falta
 	private enhanceTabsWithLanguageIds(tabs: any[]): void {
 		for (const tabInfo of tabs) {
 			if (!tabInfo.languageId) {
@@ -468,9 +461,7 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	/**
-	 * Maneja las actualizaciones pendientes
-	 */
+	/// Maneja las actualizaciones pendientes
 	private handlePendingUpdates(forceIconRefresh: boolean = false): void {
 		if (this.pendingUpdate) {
 			this.pendingUpdate = false;
@@ -478,9 +469,7 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	/**
-	 * Actualiza la vista del webview (delega a performUpdate para evitar duplicación)
-	 */
+	/// Actualiza la vista del webview (delega a performUpdate para evitar duplicación)
 	private async updateView(forceIconRefresh: boolean = false): Promise<void> {
 		if (!this._view || !this._context) return;
 
@@ -493,9 +482,7 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	/**
-	 * Devuelve la configuración de la vista
-	 */
+	/// Devuelve la configuración de la vista
 	private getViewConfig() {
 		const config = vscode.workspace.getConfiguration('sidetabs');
 		return {
@@ -505,10 +492,8 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 		};
 	}
 
-	/**
-	 * Maneja los cambios en diagnósticos (errores, warnings, info)
-	 * Se ejecuta automáticamente cuando VS Code detecta cambios en diagnósticos
-	 */
+	/// Maneja los cambios en diagnósticos (errores, warnings, info)
+	/// Se ejecuta automáticamente cuando VS Code detecta cambios en diagnósticos
 	private onDiagnosticsChanged(event: vscode.DiagnosticChangeEvent): void {
 		if (!this._view || !this._view.visible) return;
 
@@ -558,19 +543,21 @@ export class TabsProvider implements vscode.WebviewViewProvider {
 				for (const tabInfo of affectedTabs) {
 					// Asegurarse de que es un TabInputText antes de acceder a uri
 					if (tabInfo.tab.input instanceof vscode.TabInputText) {
-						const diagData = await this.diagnosisManager.getDiagnosis(tabInfo.tab.input.uri);
+						if (this.tabDiagnosticsManager) {
+							const diagData = await this.tabDiagnosticsManager.getDiagnostics(tabInfo.tab.input.uri);
 
-						diagnosisUpdates.push({
-							uniqueId: tabInfo.uniqueId,
-							diagnosis: {
-								errors: diagData.errors,
-								warnings: diagData.warnings,
-								infos: diagData.infos
-							},
-							diagnosisLevel: diagData.errors > 0 ? 'error' :
-								diagData.warnings > 0 ? 'warning' :
-									diagData.infos > 0 ? 'info' : undefined
-						});
+							diagnosisUpdates.push({
+								uniqueId: tabInfo.uniqueId,
+								diagnosis: {
+									errors: diagData.errors,
+									warnings: diagData.warnings,
+									infos: diagData.infos
+								},
+								diagnosisLevel: diagData.errors > 0 ? 'error' :
+									diagData.warnings > 0 ? 'warning' :
+										diagData.infos > 0 ? 'info' : undefined
+							});
+						}
 					}
 				}
 

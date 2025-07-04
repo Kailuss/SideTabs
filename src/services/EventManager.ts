@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { TabManager } from './TabManager';
-import { CommandManager } from './CommandManager';
+import { TabMenuManager } from './TabMenuManager';
 import { TabsProvider } from 'src/providers/TabsProvider';
 
 //· Comandos reconocidos desde el webview
@@ -26,71 +26,99 @@ export class EventManager {
 
 	constructor(
 		private tabManager: TabManager,
-		private commandManager: CommandManager,
+		private commandManager: TabMenuManager,
 		private tabsProvider: TabsProvider
 	) { }
 
-	/// Registra todos los listeners relevantes para cambios de configuración,
-	/// cambios en las tabs, diagnósticos y mensajes del webview.
-	/// Llama a los callbacks proporcionados cuando detecta cambios.
+	/**
+	 * Registra todos los listeners relevantes para sincronizar el estado de las tabs
+	 * entre VS Code y el webview de la extensión.
+	 * 
+	 * @param tabsPanel - El webview donde se muestra la UI de las tabs.
+	 * @param diagnosisManager - (No usado aquí, pero puede ser para diagnósticos).
+	 * @param onTabsChanged - Callback para actualizar la UI cuando cambian las tabs.
+	 * @param onDiagnosisChanged - Callback para actualizar diagnósticos.
+	 */
 	public setupEventListeners(
-		webviewView: vscode.WebviewView,
+		tabsPanel: vscode.WebviewView,
 		diagnosisManager: any,
 		onTabsChanged: (fast: boolean) => void,
-		onDiagnosisChanged: () => void
+		onDiagnosisChanged: (uris?: vscode.Uri[]) => void
 	): void {
+		console.log(`[SideTabs] EventManager: Configurando listeners para el webview`);
 		this.dispose(); // Limpia listeners previos
+
 		this.disposables.push(
-			// Cambios de configuración
+			// Listener: Cambios de configuración de la extensión
+			// Si el usuario cambia settings de 'sidetabs', se fuerza actualización de tabs
 			vscode.workspace.onDidChangeConfiguration(e => {
 				if (e.affectsConfiguration('sidetabs')) onTabsChanged(false);
 			}),
-			// Cambios en las tabs (cierre, apertura, movimiento)
+
+			// Listener: Cambios en las tabs (abrir, cerrar, mover, etc) desde VS Code
+			// Este evento se dispara cuando el usuario interactúa con las tabs nativas de VS Code,
+			// por ejemplo, abre, cierra o mueve una pestaña en la barra superior estándar.
+			// No captura acciones realizadas desde el webview de la extensión, solo desde la UI principal de VS Code.
 			vscode.window.tabGroups.onDidChangeTabs((e) => {
-				console.log(`[SideTabs] Cambio en tabs detectado: ${e.changed.length} cambiados, ${e.closed.length} cerrados, ${e.opened.length} abiertos`);
+				console.log(`[SideTabs] EventManager: Cambio en tabs detectado: ${e.changed.length} cambiados, ${e.closed.length} cerrados, ${e.opened.length} abiertos`);
 				onTabsChanged(true);
 			}),
+
+			// Listener: Cambios en los grupos de tabs (por ejemplo, se crea o elimina un grupo)
 			vscode.window.tabGroups.onDidChangeTabGroups(() => {
-				console.log(`[SideTabs] Cambio en grupos de tabs detectado`);
+				console.log(`[SideTabs] EventManager: Cambio en grupos de tabs detectado`);
 				onTabsChanged(true);
 			}),
+
+			// Listener: Cambio de editor de texto activo (cuando el usuario cambia de archivo)
 			vscode.window.onDidChangeActiveTextEditor((e) => {
-				console.log(`[SideTabs] Cambio de editor activo: ${e?.document.fileName || 'ninguno'}`);
+				console.log(`[SideTabs] EventManager: Cambio de editor activo: ${e?.document.fileName || 'ninguno'}`);
 				onTabsChanged(true);
 			}),
-			// También detectar cambios en la tab activa
+
+			// Listener: Cambio de editor de texto activo (duplicado, pero con delay para asegurar actualización)
 			vscode.window.onDidChangeActiveTextEditor(() => {
-				console.log(`[SideTabs] Cambio de editor de texto activo detectado`);
+				console.log(`[SideTabs] EventManager: Cambio de editor de texto activo detectado`);
 				setTimeout(() => onTabsChanged(true), 50); // Pequeño retraso para asegurar que VS Code actualice el estado
 			}),
-			// Cambios en diagnósticos
-			vscode.languages.onDidChangeDiagnostics(() => {
-				console.log(`[SideTabs] Cambio en diagnósticos detectado (general)`);
-				onDiagnosisChanged();
+
+			// Listener: Cambios en diagnósticos (errores/warnings en archivos)
+			vscode.languages.onDidChangeDiagnostics((e) => {
+				console.log(`[SideTabs] Cambio en diagnósticos detectado para ${e.uris.length} archivos`);
+				onDiagnosisChanged([...e.uris]); // Convert readonly array to mutable array
 			}),
+
+			// Listener: Guardado de documentos (puede afectar diagnósticos)
 			vscode.workspace.onDidSaveTextDocument((doc) => {
-				console.log(`[SideTabs] Documento guardado: ${doc.fileName}`);
-				onDiagnosisChanged();
+				console.log(`[SideTabs] EventManager: Documento guardado: ${doc.fileName}`);
+				onDiagnosisChanged([doc.uri]);
 			}),
+
+			// Listener: Apertura de nuevos documentos (puede afectar tabs y diagnósticos)
 			vscode.workspace.onDidOpenTextDocument((doc) => {
-				console.log(`[SideTabs] Documento abierto: ${doc.fileName}`);
-				onTabsChanged(false);
+				console.log(`[SideTabs] EventManager: Documento abierto: ${doc.fileName}`);
+				onDiagnosisChanged([doc.uri]); // Actualizar diagnósticos para el nuevo documento
+				onTabsChanged(true);
 			}),
-			// Mensajes del webview (acciones del usuario en la UI)
-			webviewView.webview.onDidReceiveMessage(async message => {
+
+			// Listener: Mensajes recibidos desde el webview (acciones del usuario en la UI de la extensión)
+			//? Aquí se capturan todas las acciones realizadas desde la UI personalizada del webview,
+			// como clics en pestañas, cerrar, mover, menú contextual, etc.
+			tabsPanel.webview.onDidReceiveMessage(async message => {
+				console.log('[SideTabs] EventManager: Mensaje recibido desde webview:', message.command);
+				// Si el webview avisa que está listo, solo loguea
 				if (message.command === WebviewCommand.viewReady) {
-					console.log('[LoverTab] Vista lista. Estilos cargados:', message.stylesLoaded);
+					console.log('[SideTabs] EventManager: Vista lista. Estilos cargados:', message.stylesLoaded);
 					return;
+				}
+				if (message.command === 'tabClicked') {
+					vscode.workspace.openTextDocument({ content: '', language: 'plaintext' })
+						.then(doc => vscode.window.showTextDocument(doc));
 				}
 				// Procesa el mensaje recibido y ejecuta la acción correspondiente
 				await this.handleWebviewMessage(message, async (forceFullUpdate?: boolean) => {
-					onTabsChanged(false); // Siempre forzar actualización completa
+					onTabsChanged(true); // Siempre forzar actualización completa
 				});
-				//await this.handleWebviewMessage(message, () => this.tabsProvider.performUpdate());
-			}),
-			vscode.languages.onDidChangeDiagnostics((e) => {
-				console.log(`[SideTabs] Cambio en diagnósticos detectado para ${e.uris.length} archivos`);
-				onDiagnosisChanged();
 			})
 		);
 	}
@@ -101,29 +129,30 @@ export class EventManager {
 		this.disposables = [];
 	}
 
-	/// Procesa los mensajes recibidos desde el webview y
-	/// ejecuta la acción correspondiente según el comando recibido.
-	/// @param message Mensaje recibido del webview
-	/// @param updateCallback Callback para refrescar la UI tras la acción
+	/**
+	 * Procesa los mensajes recibidos desde el webview y ejecuta la acción correspondiente.
+	 * Si el mensaje es para enfocar una pestaña, cerrar, mover, etc, llama al handler adecuado.
+	 */
 	public async handleWebviewMessage(
 		message: any,
 		updateCallback: () => Promise<void>
 	): Promise<void> {
 		const cmd = message.command as WebviewCommand;
-		console.log('[LoverTab] Mensaje recibido desde webview:', cmd);
+		console.log('[SideTabs] ✉ EventManager: Mensaje recibido desde webview:', cmd);
 
 		switch (cmd) {
 			case WebviewCommand.tabClicked:
 				await this.handleTabFocus(message);
+				console.log('[SideTabs] EventManager: Pestaña enfocada:', message.uniqueId);
 				break;
 			case WebviewCommand.tabClosed:
 				await this.handleTabClose(message, updateCallback);
 				break;
 			case WebviewCommand.dragStarted:
-				console.log('[LoverTab] Inicio drag & drop:', message.uniqueId);
+				console.log('[SideTabs] EventManager: Inicio drag & drop:', message.uniqueId);
 				break;
 			case WebviewCommand.dragEnded:
-				console.log('[LoverTab] Fin drag & drop, éxito:', message.success);
+				console.log('[SideTabs] EventManager: Fin drag & drop, éxito:', message.success);
 				this.tabManager.validateCustomOrder();
 				break;
 			case WebviewCommand.tabMoved:
@@ -154,7 +183,7 @@ export class EventManager {
 						}
 					}
 				}
-				console.warn('[LoverTab] Comando no reconocido:', cmd, message);
+				console.warn('[SideTabs] EventManager: Comando no reconocido:', cmd, message);
 		}
 	}
 
@@ -162,10 +191,14 @@ export class EventManager {
 
 	/// Enfoca la pestaña indicada por el mensaje.
 	private async handleTabFocus(message: any): Promise<void> {
+		console.log('[SideTabs] EventManager: Enfocando pestaña:', message.uniqueId);
 		const tabResult = this.tabManager.findTabByUniqueId(message.uniqueId);
 		if (tabResult) {
-			console.log('[LoverTab] Activando pestaña:', message.uniqueId);
+			console.log('[SideTabs] EventManager: Activando pestaña:', message.uniqueId);
 			await this.focusTab(tabResult.tab, tabResult.group);
+		} else {
+			console.warn('[SideTabs] EventManager: No se encontró la pestaña con uniqueId:', message.uniqueId);
+			// Sugerencia: revisar que el uniqueId enviado desde el webview coincida con el que maneja TabManager
 		}
 	}
 
@@ -173,7 +206,7 @@ export class EventManager {
 	private async handleTabClose(message: any, updateCallback: (forceFullUpdate?: boolean) => Promise<void>): Promise<void> {
 		const tabResult = this.tabManager.findTabByUniqueId(message.uniqueId);
 		if (tabResult) {
-			console.log('[LoverTab] Cerrando pestaña:', message.uniqueId);
+			console.log('[SideTabs] EventManager: Cerrando pestaña:', message.uniqueId);
 			try {
 				await vscode.window.tabGroups.close(tabResult.tab);
 				// Espera un poco más para asegurar que VS Code actualice el modelo de tabs
@@ -182,7 +215,7 @@ export class EventManager {
 					await updateCallback(true);
 				}, 200);
 			} catch (error) {
-				console.error('[LoverTab] Error cerrando pestaña:', error);
+				console.error('[SideTabs] EventManager: Error cerrando pestaña:', error);
 			}
 		}
 	}
@@ -196,11 +229,11 @@ export class EventManager {
 		const targetId = message.targetId || message.targetUniqueId;
 		const position = message.position === 'before' ? 'before' : 'after';
 
-		console.log(`[LoverTab] Moviendo pestaña ${sourceId} ${position} de ${targetId}`);
+		console.log(`[SideTabs] EventManager: Moviendo pestaña ${sourceId} ${position} de ${targetId}`);
 
 		const success = this.tabManager.moveTab(sourceId, targetId, position);
 		if (success) {
-			console.log('[LoverTab] Pestaña movida exitosamente');
+			console.log('[SideTabs] EventManager: Pestaña movida exitosamente');
 			setTimeout(async () => {
 				try {
 					await updateCallback();
@@ -212,11 +245,11 @@ export class EventManager {
 						timestamp: message.timestamp || Date.now()
 					});
 				} catch (error) {
-					console.error('[LoverTab] Error actualizando vista tras mover pestaña:', error);
+					console.error('[SideTabs] EventManager: Error actualizando vista tras mover pestaña:', error);
 				}
 			}, 100);
 		} else {
-			console.warn('[LoverTab] No se pudo mover la pestaña - IDs no encontrados');
+			console.warn('[SideTabs] EventManager: No se pudo mover la pestaña - IDs no encontrados');
 			this.commandManager.sendMessageToWebview({
 				command: 'tabMoveFailed',
 				sourceId,
@@ -287,7 +320,7 @@ export class EventManager {
 	/// Enfoca la pestaña indicada en el grupo correspondiente.
 	private async focusTab(tab: vscode.Tab, group: vscode.TabGroup): Promise<void> {
 		try {
-			console.log('[LoverTab] Intentando enfocar pestaña:', tab.label);
+			console.log('[SideTabs] EventManager: Intentando enfocar pestaña:', tab.label);
 			await this.activateTabWithCommand(tab, group);
 			if (tab.input instanceof vscode.TabInputText) {
 				const options = {
@@ -299,7 +332,7 @@ export class EventManager {
 				await vscode.window.showTextDocument(tab.input.uri, options);
 			}
 		} catch (error) {
-			console.error('[LoverTab] Error al enfocar pestaña:', error);
+			console.error('[SideTabs] EventManager: Error al enfocar pestaña:', error);
 		}
 	}
 
@@ -317,7 +350,7 @@ export class EventManager {
 				});
 				return;
 			} catch (e) {
-				console.warn('[LoverTab] Error al activar por URI, probando método alternativo');
+				console.warn('[SideTabs] EventManager: Error al activar por URI, probando método alternativo');
 			}
 		}
 
@@ -326,7 +359,7 @@ export class EventManager {
 				await vscode.commands.executeCommand('workbench.action.focusEditorGroup', groupIndex + 1);
 				await new Promise(resolve => setTimeout(resolve, 50));
 			} catch (e) {
-				console.warn('[LoverTab] Error al enfocar grupo:', e);
+				console.warn('[SideTabs] EventManager: Error al enfocar grupo:', e);
 			}
 		}
 
@@ -335,7 +368,7 @@ export class EventManager {
 			try {
 				await vscode.commands.executeCommand('workbench.action.openEditorAtIndex', tabIndex);
 			} catch (e) {
-				console.warn('[LoverTab] Error al activar por índice:', e);
+				console.warn('[SideTabs] EventManager: Error al activar por índice:', e);
 				if (tab.input instanceof vscode.TabInputText) {
 					try {
 						const uri = (tab.input as vscode.TabInputText).uri;
@@ -344,7 +377,7 @@ export class EventManager {
 						await vscode.commands.executeCommand('setContext', 'editorLangId',
 							doc?.languageId || '');
 					} catch (e2) {
-						console.error('[LoverTab] Todos los intentos de activación fallaron');
+						console.error('[SideTabs] EventManager: Todos los intentos de activación fallaron');
 					}
 				}
 			}

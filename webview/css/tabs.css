@@ -22,6 +22,21 @@
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	-ms-user-select: none;
+	cursor: pointer !important;
+	/* Forzar cursor */
+	pointer-events: auto !important;
+	/* Forzar eventos */
+}
+
+/* Mejorar accesibilidad y experiencia de usuario */
+.tab[role="button"] {
+	outline: none;
+	/* Quitar outline por defecto */
+}
+
+.tab[role="button"]:focus-visible {
+	outline: 1px dashed var(--vscode-focusBorder);
+	outline-offset: -1px;
 }
 
 /** Estados de la pestaña - usando !important para garantizar que se apliquen */
@@ -94,11 +109,18 @@
 .tab.static {
 	opacity: 0.64;
 	pointer-events: none;
+	/* Este bloquea eventos - dejamos para pestañas estáticas */
 	border-left-color: transparent;
 }
 
+/* Aseguramos que TODOS los elementos dentro de una pestaña normal permitan eventos */
+.tab:not(.static) *,
+.tab * {
+	pointer-events: auto !important;
+}
+
 /* Estado de diagnósticos */
-.tab.has-diagnosis {
+.tab.has-diagnostics {
 	height: auto !important;
 	min-height: var(--tab-height);
 }

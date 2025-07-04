@@ -1,31 +1,34 @@
 /**
  * Gestor de arrastrar y soltar para pestañas
  * Implementa una experiencia de drag & drop con animaciones fluidas
- * Basado en la lógica del TabDragManager
+ * Usa el TabDataModel centralizado para gestión de datos
  */
-const DragDropManager = {
+window.DragDropManager = {
 	// Referencias y variables de estado
 	tabContainer: null,
 	allTabs: [],
 	vscodeApi: null,
+	tabDataModel: null, // Referencia al modelo de datos centralizado
+
+	// Listeners vinculados para añadir y quitar correctamente
+	boundHandleDragMove: null,
+	boundHandleDragEnd: null,
+
 	// Variables para el arrastre
 	isDragging: false,
 	draggedTab: null,
-	originalTabOrder: [], // Array de IDs (para compatibilidad con backend)
-	tempTabStates: [], // Array de objetos con información completa de pestañas
+	draggedTabId: null,
 	startY: 0,
 	dragStarted: false,
 	currentHoverTabId: null, // ID de la pestaña sobre la que está el cursor
 
 	// Variables para animaciones
-	animatingTabs: new Set(),
 	animationDebounceTimer: null,
 	lastOrderString: '', // Para detectar cambios reales
 
 	// Configuración
 	dragThreshold: 8,
 	animationDuration: 200,
-	standardTabHeight: 40, // Altura estándar de las pestañas
 
 	/**
 	 * Configura el sistema de arrastrar y soltar
@@ -33,7 +36,10 @@ const DragDropManager = {
 	 * @param {Object} options - Opciones de configuración
 	 */
 	setupDragDrop(container, options = {}) {
-		if (!container) return;
+		if (!container) {
+			console.error('[DragDropManager] No se proporcionó contenedor');
+			return;
+		}
 
 		// Limpiar configuración anterior si existe
 		this.cleanup();
@@ -41,11 +47,33 @@ const DragDropManager = {
 		// Establecer referencias
 		this.tabContainer = container;
 		this.vscodeApi = window.vscodeApi || (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null);
+		this.tabDataModel = window.tabDataModel;
+
+		if (!this.tabDataModel) {
+			console.error('[DragDropManager] TabDataModel no está disponible');
+			return;
+		}
+
+		if (!this.vscodeApi) {
+			console.error('[DragDropManager] vscodeApi no está disponible');
+			return;
+		}
+
+		// Crear y almacenar los listeners vinculados UNA SOLA VEZ
+		this.boundHandleDragMove = this.handleDragMove.bind(this);
+		this.boundHandleDragEnd = this.handleDragEnd.bind(this);
+
+		// Inicializar el modelo desde el DOM
+		this.tabDataModel.initializeFromDOM(container);
+
+		// Suscribirse a cambios del modelo
+		this.modelObserverCleanup = this.tabDataModel.addObserver(this.handleModelChange.bind(this));
+
 		this.refreshTabsList();
 
 		// Aplicar opciones personalizadas
-		this.dragThreshold = 8;
-		this.animationDuration = 200;
+		this.dragThreshold = options.threshold || 8;
+		this.animationDuration = options.animationDuration || 200;
 
 		// Configurar listener para mousedown en las pestañas
 		this.tabContainer.addEventListener('mousedown', this.handleDragStart.bind(this));
@@ -70,7 +98,36 @@ const DragDropManager = {
 		document.removeEventListener('mousemove', this.handleDragMove.bind(this)); // Borrar el listener de movimiento del ratón
 		document.removeEventListener('mouseup', this.handleDragEnd.bind(this)); // Borrar el listener de finalización del arrastre
 
+		// Limpiar suscripción al modelo
+		if (this.modelObserverCleanup) {
+			this.modelObserverCleanup();
+			this.modelObserverCleanup = null;
+		}
+
 		this.resetState();
+	},
+
+	/**
+	 * Maneja cambios en el modelo de datos
+	 */
+	handleModelChange(eventType, data, model) {
+		switch (eventType) {
+			case 'initialized':
+				console.log('[DragDropManager] Modelo inicializado con', data.tabs.length, 'pestañas');
+				break;
+			case 'tabsReordered':
+				console.log('[DragDropManager] Pestañas reordenadas en el modelo');
+				break;
+			case 'positionsRecalculated':
+				// Solo actualizar visualmente si no estamos arrastrando
+				if (!this.isDragging) {
+					this.updateTabsVisualOrder();
+				}
+				break;
+			default:
+				// Otros eventos del modelo
+				break;
+		}
 	},
 
 	//#region 🔄 Reinicia estado
@@ -78,12 +135,11 @@ const DragDropManager = {
 	resetState() {
 		this.isDragging = false;
 		this.draggedTab = null;
-		this.originalTabOrder = [];
-		this.tempTabStates = [];
+		this.draggedTabId = null;
 		this.dragStarted = false;
 		this.currentHoverTabId = null;
-		this.animatingTabs.clear();
 		this.lastOrderString = '';
+
 		if (this.animationDebounceTimer) {
 			clearTimeout(this.animationDebounceTimer);
 			this.animationDebounceTimer = null;
@@ -110,62 +166,45 @@ const DragDropManager = {
 				}, 10);
 			});
 		}
+
+		// Limpiar estados de animación en el modelo
+		if (this.tabDataModel) {
+			const allTabs = this.tabDataModel.getAllTabs();
+			allTabs.forEach(tab => {
+				if (tab.isAnimating || tab.isDragged) {
+					this.tabDataModel.updateTab(tab.id, {
+						isAnimating: false,
+						isDragged: false
+					}, false); // No notificar para evitar eventos en cascada
+				}
+			});
+		}
 	},
 	//#endregion
 
-	//#region 🔄 Guarda orden y posiciones
-	/// Guarda el orden original y posiciones de las pestañas
-	saveOriginalOrder() {
-		// Mantener array de IDs para compatibilidad con backend
-		this.originalTabOrder = Array.from(this.tabContainer.querySelectorAll('.tab'))
-			.map(tab => tab.dataset.uniqueId);
+	//#region 🔄 Métodos de inicialización
+	/// Inicializa el estado para el arrastre usando el modelo de datos
+	initializeDragState() {
+		// Sincronizar el modelo con el DOM actual
+		this.tabDataModel.syncWithDOM();
 
-		// Crear array de objetos con información completa
-		this.tempTabStates = [];
-		Array.from(this.tabContainer.querySelectorAll('.tab')).forEach((tab, index) => {
-			const rect = tab.getBoundingClientRect();
-			const tabState = {
-				id: tab.dataset.uniqueId,
-				originalIndex: index,    // Índice original fijo (nunca cambia)
-				targetIndex: index,      // Índice objetivo en el nuevo orden
-				top: rect.top,          // Posición original capturada
-				height: rect.height,
-				targetTop: rect.top,    // Posición objetivo calculada
-				isAnimating: false,
-				isDragged: false
-			};
-			this.tempTabStates.push(tabState);
-		});
+		// Actualizar el string de comparación usando el orden actual
+		this.lastOrderString = this.tabDataModel.getCurrentOrder().join('|');
 
-		// Inicializar string de comparación usando IDs del nuevo array
-		this.lastOrderString = this.tempTabStates.map(state => state.id).join('|');
-
-		console.log('[DragDropManager] Orden original y estados guardados:', this.tempTabStates);
+		console.log('[DragDropManager] Estado de arrastre inicializado usando TabDataModel');
+		console.log('[DragDropManager] Pestañas en el modelo:', this.tabDataModel.debug());
 	},
 	//#endregion
 
 	//#region ⚙️ Métodos de arrastre
 	/// Recalcula las posiciones objetivo de todas las pestañas según el orden actual
 	recalculateTargetPositions() {
-		if (!this.tempTabStates || this.tempTabStates.length === 0) return;
+		// Usar el método del modelo de datos
+		this.tabDataModel.recalculateTargetPositions();
 
-		// Ordenar el array por targetIndex para calcular posiciones correctamente
-		const sortedStates = [...this.tempTabStates].sort((a, b) => a.targetIndex - b.targetIndex);
-
-		// Comenzar desde la posición original de la primera pestaña (la que tiene targetIndex 0)
-		let accumulatedTop = this.tempTabStates[0].top;
-
-		// Recalcular targetTop para cada pestaña según su targetIndex
-		sortedStates.forEach((tabState) => {
-			// Calcular nueva posición objetivo
-			tabState.targetTop = accumulatedTop;
-
-			// Acumular para la siguiente pestaña
-			accumulatedTop += tabState.height;
-		});
-
-		console.log('[DragDropManager] Posiciones objetivo recalculadas:',
-			sortedStates.map(s => `${s.id}[${s.targetIndex}]: ${s.targetTop}px`));
+		const allTabs = this.tabDataModel.getAllTabs();
+		console.log('[DragDropManager] Posiciones objetivo recalculadas via TabDataModel:',
+			allTabs.map(tab => `${tab.id}[${tab.targetIndex}]: ${tab.targetTop}px`));
 	},
 
 	/// Elimina el elemento fantasma
@@ -176,10 +215,10 @@ const DragDropManager = {
 		}
 	},
 
-	/// Actualiza visualmente todas las pestañas según la lista temporal
+	/// Actualiza visualmente todas las pestañas según el modelo de datos
 	updateTabsVisualOrder() {
 		//- Crea una cadena única para detectar cambios reales en el orden
-		const currentOrderString = this.tempTabStates.map(state => state.id).join('|');
+		const currentOrderString = this.tabDataModel.getCurrentOrder().join('|');
 
 		//- Si no hay cambios reales en el orden, no hace nada
 		if (currentOrderString === this.lastOrderString) return;
@@ -198,48 +237,49 @@ const DragDropManager = {
 	},
 	//TODO: Anima las pestañas a sus nuevas posiciones sin reordenar el DOM
 	animateTabsToNewPositions() {
+		// Obtener todas las pestañas del modelo
+		const allTabs = this.tabDataModel.getAllTabs();
+
 		// Crear mapa de pestañas por ID para acceso rápido
 		const tabsById = new Map();
 		this.allTabs.forEach(tab => {
 			tabsById.set(tab.dataset.uniqueId, tab);
 		});
 
-		console.log(`[DragDropManager] Animando pestañas hacia posiciones objetivo`);
+		console.log(`[DragDropManager] Animando pestañas hacia posiciones objetivo usando TabDataModel`);
 
 		// Aplicar las transformaciones usando las posiciones objetivo ya calculadas
-		this.tempTabStates.forEach((tabState) => {
-			const tab = tabsById.get(tabState.id);
+		allTabs.forEach((tabData) => {
+			const tab = tabsById.get(tabData.id);
 			if (!tab) return;
 
 			// Calcular el desplazamiento desde la posición original hacia la objetivo
-			const newDeltaY = tabState.targetTop - tabState.top;
+			const newDeltaY = tabData.targetTop - tabData.top;
 
 			// Obtener el deltaY actual de la pestaña (si tiene transform)
 			const currentTransform = tab.style.transform;
 			const currentDeltaY = currentTransform.includes('translateY') ?
 				parseFloat(currentTransform.match(/translateY\(([-\d.]+)px\)/)?.[1] || '0') : 0;
 
-			console.log(`[DragDropManager] Pestaña ${tabState.id}: currentDeltaY ${currentDeltaY} -> targetDeltaY ${newDeltaY}px`);
+			console.log(`[DragDropManager] Pestaña ${tabData.id}: currentDeltaY ${currentDeltaY} -> targetDeltaY ${newDeltaY}px`);
 
 			// Solo aplicar cambios si hay una diferencia significativa
 			if (Math.abs(newDeltaY - currentDeltaY) > 0) {
 				// Determinar si usar transición basado en la diferencia y si es primera vez
 				const useTransition = !currentTransform.includes('translateY') || Math.abs(newDeltaY - currentDeltaY) > 5;
 
-				if (useTransition && !tabState.isDragged) {
+				if (useTransition && !tabData.isDragged) {
 					// Solo aplicar transición a pestañas que no están siendo arrastradas
 					tab.style.transition = `transform ${this.animationDuration}ms ease-out`;
 
-					// Marcar como animando en el estado
-					tabState.isAnimating = true;
-					this.animatingTabs.add(tabState.id);
-					console.log(`[DragDropManager] 🎬 Pestaña ${tabState.id} MARCADA como animando hacia ${tabState.targetTop}px (isAnimating: ${tabState.isAnimating})`);
+					// Marcar como animando en el modelo
+					this.tabDataModel.updateTab(tabData.id, { isAnimating: true }, false);
+					console.log(`[DragDropManager] 🎬 Pestaña ${tabData.id} MARCADA como animando hacia ${tabData.targetTop}px`);
 
 					// Programar limpieza después de la animación
 					setTimeout(() => {
-						tabState.isAnimating = false;
-						this.animatingTabs.delete(tabState.id);
-						console.log(`[DragDropManager] ✅ Pestaña ${tabState.id} FINALIZÓ animación (isAnimating: ${tabState.isAnimating})`);
+						this.tabDataModel.updateTab(tabData.id, { isAnimating: false }, false);
+						console.log(`[DragDropManager] ✅ Pestaña ${tabData.id} FINALIZÓ animación`);
 					}, this.animationDuration + 50);
 				} else {
 					// Para la pestaña arrastrada o movimientos pequeños, sin transición
@@ -254,13 +294,13 @@ const DragDropManager = {
 				}
 
 				// Si es la pestaña arrastrada, mantener estado especial
-				if (tabState.isDragged) {
+				if (tabData.isDragged) {
 					tab.style.pointerEvents = 'none';
-					console.log(`[DragDropManager] Pestaña arrastrada ${tabState.id} posicionada hacia objetivo sin transición`);
+					console.log(`[DragDropManager] Pestaña arrastrada ${tabData.id} posicionada hacia objetivo sin transición`);
 				}
 			} else {
 				// No hay cambio significativo, mantener estado actual
-				if (tabState.isDragged) {
+				if (tabData.isDragged) {
 					tab.style.opacity = '1.0';
 					tab.style.pointerEvents = 'none';
 				}
@@ -338,8 +378,11 @@ const DragDropManager = {
 		// Prevenir comportamiento predeterminado
 		e.preventDefault();
 
-		// Guardar el orden original de las pestañas y sus posiciones
-		this.saveOriginalOrder();
+		// Inicializar el estado usando el modelo de datos
+		this.initializeDragState();
+
+		// Guardar ID de la pestaña arrastrada
+		this.draggedTabId = this.draggedTab.dataset.uniqueId;
 
 		// Guardar posición inicial
 		this.startY = e.clientY;
@@ -348,9 +391,9 @@ const DragDropManager = {
 		this.isDragging = true;
 		this.dragStarted = false; // El arrastre real aún no ha comenzado
 
-		// Agregar listener para movimiento y soltar
-		document.addEventListener('mousemove', this.handleDragMove.bind(this));
-		document.addEventListener('mouseup', this.handleDragEnd.bind(this));
+		// Agregar listener para movimiento y soltar usando las referencias guardadas
+		document.addEventListener('mousemove', this.boundHandleDragMove);
+		document.addEventListener('mouseup', this.boundHandleDragEnd);
 
 		console.log('[DragDropManager] Posible arrastre de pestaña iniciado, esperando superar umbral');
 	},
@@ -369,11 +412,8 @@ const DragDropManager = {
 			if (distance >= this.dragThreshold) {
 				this.dragStarted = true;
 
-				// Marcar la pestaña arrastrada en los estados
-				const draggedState = this.tempTabStates.find(state => state.id === this.draggedTab.dataset.uniqueId);
-				if (draggedState) {
-					draggedState.isDragged = true;
-				}
+				// Marcar la pestaña arrastrada en el modelo
+				this.tabDataModel.updateTab(this.draggedTabId, { isDragged: true }, false);
 
 				// Hacer la pestaña original semi-transparente pero visible en su posición
 				this.draggedTab.style.opacity = '0.3';
@@ -382,7 +422,7 @@ const DragDropManager = {
 				// Añadir clase para deshabilitar hover en todas las pestañas durante el arrastre
 				this.tabContainer.classList.add('dragging-active');
 
-				console.log('[DragDropManager] Umbral superado, iniciando arrastre de pestaña:', this.draggedTab.dataset.uniqueId);
+				console.log('[DragDropManager] Umbral superado, iniciando arrastre de pestaña:', this.draggedTabId);
 			} else {
 				// No se ha superado el umbral, no hacer nada todavía
 				return;
@@ -394,41 +434,39 @@ const DragDropManager = {
 		const mouseY = e.clientY;
 
 		// Obtener referencias actualizadas a todas las pestañas
-		const allCurrentTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
-
-		// Encontrar sobre qué pestaña está el cursor actualmente
+		const allCurrentTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));		// Encontrar sobre qué pestaña está el cursor actualmente
 		let hoverTabId = null;
 		let insertPosition = -1;
 
-		// Recorrer tempTabStates ordenado por targetIndex para detectar hover
-		const sortedStates = [...this.tempTabStates].sort((a, b) => a.targetIndex - b.targetIndex);
-		const draggedId = this.draggedTab.dataset.uniqueId;
+		// Obtener pestañas ordenadas por targetIndex desde el modelo
+		const allTabs = this.tabDataModel.getAllTabs();
+		const sortedTabs = [...allTabs].sort((a, b) => a.targetIndex - b.targetIndex);
 
-		for (const tabState of sortedStates) {
+		for (const tabData of sortedTabs) {
 			// Saltar la pestaña arrastrada
-			if (tabState.id === draggedId) continue;
+			if (tabData.id === this.draggedTabId) continue;
 
 			// CLAVE: Excluir pestañas que están animándose para detección de hover
-			if (tabState.isAnimating) {
-				console.log(`[DragDropManager] ⏭️ Saltando detección en pestaña ${tabState.id} (animándose)`);
+			if (tabData.isAnimating) {
+				console.log(`[DragDropManager] ⏭️ Saltando detección en pestaña ${tabData.id} (animándose)`);
 				continue;
 			}
 
-			const originalTabTop = tabState.top;
-			const originalTabBottom = tabState.top + tabState.height;
+			const originalTabTop = tabData.top;
+			const originalTabBottom = tabData.top + tabData.height;
 
 			// Zona de detección de hover (toda la pestaña)
 			if (mouseY >= originalTabTop && mouseY <= originalTabBottom) {
-				hoverTabId = tabState.id;
+				hoverTabId = tabData.id;
 
 				// Determinar posición de inserción basada en la mitad de la pestaña
-				const tabCenter = originalTabTop + (tabState.height / 2);
+				const tabCenter = originalTabTop + (tabData.height / 2);
 				if (mouseY < tabCenter) {
 					// Mitad superior: insertar antes de esta pestaña
-					insertPosition = tabState.targetIndex;
+					insertPosition = tabData.targetIndex;
 				} else {
 					// Mitad inferior: insertar después de esta pestaña
-					insertPosition = tabState.targetIndex + 1;
+					insertPosition = tabData.targetIndex + 1;
 				}
 
 				console.log(`[DragDropManager] 🎯 Hover detectado en pestaña ${hoverTabId}, insertar en posición ${insertPosition}`);
@@ -438,14 +476,14 @@ const DragDropManager = {
 
 		// Si no se detectó hover en ninguna pestaña, verificar límites del contenedor
 		if (hoverTabId === null) {
-			const firstState = sortedStates[0];
-			const lastState = sortedStates[sortedStates.length - 1];
+			const firstTab = sortedTabs[0];
+			const lastTab = sortedTabs[sortedTabs.length - 1];
 
-			if (firstState && mouseY < firstState.top) {
+			if (firstTab && mouseY < firstTab.top) {
 				insertPosition = 0; // Insertar al principio
 				console.log(`[DragDropManager] 🔝 Cursor arriba del contenedor, insertar en posición 0`);
-			} else if (lastState && mouseY > (lastState.top + lastState.height)) {
-				insertPosition = sortedStates.length; // Insertar al final
+			} else if (lastTab && mouseY > (lastTab.top + lastTab.height)) {
+				insertPosition = sortedTabs.length; // Insertar al final
 				console.log(`[DragDropManager] 🔽 Cursor abajo del contenedor, insertar al final (posición ${insertPosition})`);
 			}
 		}
@@ -455,11 +493,11 @@ const DragDropManager = {
 			this.currentHoverTabId = hoverTabId;
 
 			// Ajustar posición de inserción para evitar índices fuera de rango
-			const maxPosition = this.tempTabStates.length - 1;
+			const maxPosition = allTabs.length - 1;
 			insertPosition = Math.max(0, Math.min(insertPosition, maxPosition));
 
-			// Reordenar las pestañas
-			if (this.reorderTabsForInsertion(draggedId, insertPosition)) {
+			// Reordenar las pestañas usando el método del modelo
+			if (this.reorderTabsForInsertion(this.draggedTabId, insertPosition)) {
 				// Recalcular posiciones objetivo para todas las pestañas
 				this.recalculateTargetPositions();
 
@@ -472,40 +510,50 @@ const DragDropManager = {
 
 	/// Reordena las pestañas insertando la pestaña arrastrada en una nueva posición
 	reorderTabsForInsertion(draggedId, insertPosition) {
-		// Encontrar el estado de la pestaña arrastrada
-		const draggedState = this.tempTabStates.find(state => state.id === draggedId);
-		if (!draggedState) return false;
+		// Obtener la pestaña arrastrada del modelo
+		const draggedTab = this.tabDataModel.getTab(draggedId);
+		if (!draggedTab) return false;
 
-		const currentPosition = draggedState.targetIndex;
+		const currentPosition = draggedTab.targetIndex;
 
 		// Si no hay cambio real de posición, no hacer nada
 		if (currentPosition === insertPosition) return false;
 
 		console.log(`[DragDropManager] Reordenando: mover ${draggedId} de posición ${currentPosition} a ${insertPosition}`);
 
-		// Resetear todos los targetIndex
-		this.tempTabStates.forEach(state => {
-			if (state.id === draggedId) {
+		// Obtener todas las pestañas del modelo
+		const allTabs = this.tabDataModel.getAllTabs();
+
+		// Actualizar targetIndex para todas las pestañas
+		allTabs.forEach(tab => {
+			if (tab.id === draggedId) {
 				// La pestaña arrastrada va a la nueva posición
-				state.targetIndex = insertPosition;
+				this.tabDataModel.updateTab(tab.id, { targetIndex: insertPosition }, false);
 			} else {
 				// Las demás pestañas se ajustan según la inserción
+				let newTargetIndex = tab.targetIndex;
+
 				if (currentPosition < insertPosition) {
 					// Moviendo hacia abajo: las pestañas entre current y insert se mueven hacia arriba
-					if (state.targetIndex > currentPosition && state.targetIndex <= insertPosition) {
-						state.targetIndex--;
+					if (tab.targetIndex > currentPosition && tab.targetIndex <= insertPosition) {
+						newTargetIndex--;
 					}
 				} else {
 					// Moviendo hacia arriba: las pestañas entre insert y current se mueven hacia abajo
-					if (state.targetIndex >= insertPosition && state.targetIndex < currentPosition) {
-						state.targetIndex++;
+					if (tab.targetIndex >= insertPosition && tab.targetIndex < currentPosition) {
+						newTargetIndex++;
 					}
+				}
+
+				// Solo actualizar si hay cambio
+				if (newTargetIndex !== tab.targetIndex) {
+					this.tabDataModel.updateTab(tab.id, { targetIndex: newTargetIndex }, false);
 				}
 			}
 		});
 
 		console.log('[DragDropManager] Nuevo orden de targetIndex:',
-			this.tempTabStates.map(s => `${s.id}:${s.targetIndex}`).join(', '));
+			allTabs.map(tab => `${tab.id}:${tab.targetIndex}`).join(', '));
 
 		return true;
 	},
@@ -529,12 +577,13 @@ const DragDropManager = {
 	 * Este método se ejecuta después de que las animaciones terminan
 	 */
 	finalizeTabOrder() {
-		if (!this.tempTabStates || this.tempTabStates.length === 0) {
-			console.log('[DragDropManager] No hay estados temporales para finalizar');
+		const allTabs = this.tabDataModel.getAllTabs();
+		if (!allTabs || allTabs.length === 0) {
+			console.log('[DragDropManager] No hay pestañas en el modelo para finalizar');
 			return;
 		}
 
-		console.log('[DragDropManager] Iniciando finalización del orden. Estados temporales:', this.tempTabStates.map(s => s.id));
+		console.log('[DragDropManager] Iniciando finalización del orden usando TabDataModel');
 
 		// Función interna para ejecutar el reordenamiento
 		const executeReordering = () => {
@@ -542,8 +591,8 @@ const DragDropManager = {
 				console.log('[DragDropManager] Ejecutando reordenamiento del DOM');
 
 				// Primero deshabilitar transiciones para evitar animaciones durante el reordenamiento
-				const allTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
-				allTabs.forEach(tab => {
+				const domTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
+				domTabs.forEach(tab => {
 					tab.style.transition = 'none';
 				});
 
@@ -551,7 +600,7 @@ const DragDropManager = {
 				this.tabContainer.offsetHeight;
 
 				// Limpiar todas las transformaciones
-				allTabs.forEach(tab => {
+				domTabs.forEach(tab => {
 					tab.style.transform = '';
 				});
 
@@ -559,27 +608,27 @@ const DragDropManager = {
 				// Crear un fragmento temporal con el orden correcto
 				const fragment = document.createDocumentFragment();
 
-				// Recolectar todas las pestañas en el orden temporal deseado (ordenado por targetIndex)
-				const orderedTabs = [];
-				const sortedStates = [...this.tempTabStates].sort((a, b) => a.targetIndex - b.targetIndex);
+				// Recolectar todas las pestañas en el orden objetivo (ordenado por targetIndex)
+				const orderedDomTabs = [];
+				const sortedTabs = [...allTabs].sort((a, b) => a.targetIndex - b.targetIndex);
 
-				sortedStates.forEach(tabState => {
-					const tab = this.tabContainer.querySelector(`[data-unique-id="${tabState.id}"]`);
-					if (tab) {
-						orderedTabs.push(tab);
+				sortedTabs.forEach(tabData => {
+					const domTab = this.tabContainer.querySelector(`[data-unique-id="${tabData.id}"]`);
+					if (domTab) {
+						orderedDomTabs.push(domTab);
 					} else {
-						console.warn(`[DragDropManager] No se encontró la pestaña con ID: ${tabState.id}`);
+						console.warn(`[DragDropManager] No se encontró la pestaña con ID: ${tabData.id}`);
 					}
 				});
 
 				// Verificar que tenemos todas las pestañas
-				if (orderedTabs.length !== this.tempTabStates.length) {
-					console.error(`[DragDropManager] Error: Se esperaban ${this.tempTabStates.length} pestañas pero se encontraron ${orderedTabs.length}`);
+				if (orderedDomTabs.length !== allTabs.length) {
+					console.error(`[DragDropManager] Error: Se esperaban ${allTabs.length} pestañas pero se encontraron ${orderedDomTabs.length}`);
 					return;
 				}
 
 				// Remover todas las pestañas del DOM y añadirlas al fragmento en el orden correcto
-				orderedTabs.forEach(tab => {
+				orderedDomTabs.forEach(tab => {
 					tab.parentNode.removeChild(tab);
 					fragment.appendChild(tab);
 				});
@@ -587,28 +636,31 @@ const DragDropManager = {
 				// Añadir todas las pestañas ordenadas de vuelta al contenedor
 				this.tabContainer.appendChild(fragment);
 
-				const finalOrder = sortedStates.map(s => s.id);
-				console.log('[DragDropManager] DOM reordenado correctamente usando fragmento');
+				// Actualizar el orden en el modelo para que coincida con el DOM
+				const finalOrder = sortedTabs.map(tab => tab.id);
+				this.tabDataModel.reorderTabs(finalOrder, false);
+
+				console.log('[DragDropManager] DOM reordenado correctamente usando TabDataModel');
 				console.log('[DragDropManager] Orden final aplicado:', finalOrder);
 
 				// Verificar que todas las pestañas siguen visibles
-				const finalTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
-				console.log(`[DragDropManager] Pestañas finales visibles: ${finalTabs.length}`);
+				const finalDomTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
+				console.log(`[DragDropManager] Pestañas finales visibles: ${finalDomTabs.length}`);
 
-				// Verificar que el orden en el DOM coincide con el orden temporal
-				const domOrder = finalTabs.map(tab => tab.dataset.uniqueId);
+				// Verificar que el orden en el DOM coincide con el orden objetivo
+				const domOrder = finalDomTabs.map(tab => tab.dataset.uniqueId);
 				const orderMatches = JSON.stringify(domOrder) === JSON.stringify(finalOrder);
 				console.log('[DragDropManager] Orden en DOM:', domOrder);
 				console.log('[DragDropManager] Orden esperado:', finalOrder);
 				console.log('[DragDropManager] ¿Orden correcto?', orderMatches);
 
 				if (!orderMatches) {
-					console.error('[DragDropManager] ERROR: El orden en DOM no coincide con el orden temporal');
+					console.error('[DragDropManager] ERROR: El orden en DOM no coincide con el orden objetivo');
 				}
 
 				// Restaurar transiciones después del reordenamiento
 				setTimeout(() => {
-					finalTabs.forEach(tab => {
+					finalDomTabs.forEach(tab => {
 						tab.style.transition = '';
 					});
 				}, 50);
@@ -621,7 +673,8 @@ const DragDropManager = {
 		};
 
 		// Esperar a que todas las animaciones terminen, pero con fallback inmediato si no hay animaciones
-		const hasAnimatingTabs = this.animatingTabs.size > 0;
+		const animatingTabs = allTabs.filter(tab => tab.isAnimating);
+		const hasAnimatingTabs = animatingTabs.length > 0;
 		const maxAnimationTime = hasAnimatingTabs ? this.animationDuration + 50 : 50;
 
 		console.log(`[DragDropManager] Esperando ${maxAnimationTime}ms antes de reordenar (animaciones activas: ${hasAnimatingTabs})`);
@@ -634,26 +687,19 @@ const DragDropManager = {
 	 */
 	restoreOriginalOrder() {
 		try {
-			console.log('[DragDropManager] Restaurando orden original');
+			console.log('[DragDropManager] Restaurando orden original usando TabDataModel');
 
 			// Limpiar transformaciones
-			const allTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
-			allTabs.forEach(tab => {
+			const allDomTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
+			allDomTabs.forEach(tab => {
 				tab.style.transform = '';
 				tab.style.transition = '';
 				tab.style.opacity = '';
 				tab.style.pointerEvents = '';
 			});
 
-			// Restaurar orden original si está disponible
-			if (this.originalTabOrder && this.originalTabOrder.length > 0) {
-				this.originalTabOrder.forEach((tabId, index) => {
-					const tab = this.tabContainer.querySelector(`[data-unique-id="${tabId}"]`);
-					if (tab) {
-						this.tabContainer.appendChild(tab);
-					}
-				});
-			}
+			// El modelo mantendrá el orden original automáticamente si hay errores
+			console.log('[DragDropManager] Orden original restaurado');
 
 		} catch (error) {
 			console.error('[DragDropManager] Error al restaurar orden original:', error);
@@ -667,31 +713,26 @@ const DragDropManager = {
 	handleDragEnd(e) {
 		if (!this.isDragging) return;
 
-		// Eliminar los event listeners primero
-		document.removeEventListener('mousemove', this.handleDragMove.bind(this));
-		document.removeEventListener('mouseup', this.handleDragEnd.bind(this));
+		// Eliminar los event listeners usando las referencias guardadas
+		document.removeEventListener('mousemove', this.boundHandleDragMove);
+		document.removeEventListener('mouseup', this.boundHandleDragEnd);
+
+		// Quitar la clase que deshabilita hover en todo el contenedor
+		if (this.tabContainer) {
+			this.tabContainer.classList.remove('dragging-active');
+		}
 
 		// Si el arrastre realmente comenzó (superó el umbral)
-		if (this.dragStarted && this.draggedTab) {
-			// Marcar la pestaña arrastrada como no arrastrada en los estados
-			const draggedState = this.tempTabStates.find(state => state.id === this.draggedTab.dataset.uniqueId);
-			if (draggedState) {
-				draggedState.isDragged = false;
-			}
+		if (this.dragStarted && this.draggedTab && this.draggedTabId) {
+			// Marcar la pestaña arrastrada como no arrastrada en el modelo
+			this.tabDataModel.updateTab(this.draggedTabId, { isDragged: false }, false);
 
-			// Restaurar la pestaña original
-			this.draggedTab.style.opacity = '';
-			this.draggedTab.style.pointerEvents = '';
-
-			// Quitar la clase que deshabilita hover
-			this.tabContainer.classList.remove('dragging-active');
-
-			// Obtener el nuevo orden final como array de IDs extraído de tempTabStates ordenado por targetIndex
-			const sortedStates = [...this.tempTabStates].sort((a, b) => a.targetIndex - b.targetIndex);
-			const newOrder = sortedStates.map(state => state.id);
+			// Obtener el nuevo orden final desde el modelo
+			const newOrder = this.tabDataModel.getTargetOrder();
+			const originalOrder = this.tabDataModel.getCurrentOrder();
 
 			// Solo enviar si realmente hubo un cambio en el orden
-			if (JSON.stringify(this.originalTabOrder) !== JSON.stringify(newOrder)) {
+			if (JSON.stringify(originalOrder) !== JSON.stringify(newOrder)) {
 				console.log('[DragDropManager] Orden final:', newOrder);
 
 				// Finalizar el orden visual (reordenar DOM después de animaciones)
@@ -702,26 +743,19 @@ const DragDropManager = {
 					this.vscodeApi.postMessage({
 						command: 'reorderTabs',
 						order: newOrder,
-						originalOrder: this.originalTabOrder
+						originalOrder: originalOrder
 					});
 				} else {
 					console.warn('[DragDropManager] No se pudo enviar mensaje al backend: API de VS Code no disponible');
 				}
 			} else {
 				console.log('[DragDropManager] No hubo cambios en el orden de las pestañas');
-
-				// Limpiar cualquier transformación visual residual
-				const allTabs = Array.from(this.tabContainer.querySelectorAll('.tab'));
-				allTabs.forEach(tab => {
-					tab.style.transform = '';
-					tab.style.transition = '';
-				});
 			}
 		} else {
 			console.log('[DragDropManager] El arrastre no superó el umbral, tratando como un clic');
 		}
 
-		// Limpiar estado de arrastre
+		// Limpiar estado de arrastre de forma incondicional
 		this.resetState();
 	}
 };

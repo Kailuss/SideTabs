@@ -5,24 +5,24 @@
 interface WebviewBaseTemplateParams {
   uris: {
     mainStyle: string;
-    codicons: string;
     mainScript: string;
     styles: {
       tabs: string;
+      tabComponents: string;
+      diagnostics: string;
       dragDrop: string;
       dragDropAnimation: string;
-      tabComponents: string;
-      diagnosis: string;
-      diagnosisCompact: string;
-      actions: string;
     };
-    scripts?: {
-      dragDropManager?: string;
+    scripts: {
+      dragDropManager: string;
+      tabDataModel: string;
+      eventsBridge: string;
     };
   };
   tabsHtml: string;
   fontSize: number;
   tabHeight: number;
+  cspSource: string;
 }
 
 /**
@@ -31,22 +31,20 @@ interface WebviewBaseTemplateParams {
  * @returns The complete HTML string for the webview base.
  */
 export function renderBaseTemplate(params: WebviewBaseTemplateParams): string {
-  const { uris, tabsHtml, fontSize, tabHeight } = params;
+  const { uris, tabsHtml, fontSize, tabHeight, cspSource } = params;
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SideTabs</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; script-src ${cspSource}; style-src ${cspSource} 'unsafe-inline';">
     <link href="${uris.mainStyle}" rel="stylesheet" />
-    <link href="${uris.codicons}" rel="stylesheet" />
     <link href="${uris.styles.tabs}" rel="stylesheet" />
+    <link href="${uris.styles.tabComponents}" rel="stylesheet" />
+    <link href="${uris.styles.diagnostics}" rel="stylesheet" />
     <link href="${uris.styles.dragDrop}" rel="stylesheet" />
     <link href="${uris.styles.dragDropAnimation}" rel="stylesheet" />
-    <link href="${uris.styles.tabComponents}" rel="stylesheet" />
-    <link href="${uris.styles.diagnosis}" rel="stylesheet" />
-    <link href="${uris.styles.diagnosisCompact}" rel="stylesheet" />
-    <link href="${uris.styles.actions}" rel="stylesheet" />
     <style>
       :root {
         --st-font-size: ${fontSize}px;
@@ -55,10 +53,24 @@ export function renderBaseTemplate(params: WebviewBaseTemplateParams): string {
     </style>
   </head>
   <body>
+    <script>
+      // Diagnóstico inmediato: ¿Se ejecuta JS en el webview?
+      window._sidetabsWebviewBoot = true;
+      console.log('[SideTabs DIAG] Webview JS booted');
+      window.addEventListener('error', function(e) {
+        console.error('[SideTabs DIAG] JS ERROR:', e.message, e.filename, e.lineno, e.colno, e.error);
+        const diag = document.createElement('div');
+        diag.style = 'background:#f14c4c;color:#fff;padding:8px;font-size:13px;z-index:9999;position:fixed;top:0;left:0;right:0';
+        diag.textContent = '[SideTabs DIAG] JS ERROR: ' + e.message + ' (' + e.filename + ':' + e.lineno + ')';
+        document.body.appendChild(diag);
+      });
+    </script>
     <div id="tabs-container">
       ${tabsHtml}
     </div>
-    ${uris.scripts?.dragDropManager ? `<script src="${uris.scripts.dragDropManager}"></script>` : ''}
+    <script src="${uris.scripts.tabDataModel}"></script>
+    <script src="${uris.scripts.eventsBridge}"></script>
+    <script src="${uris.scripts.dragDropManager}"></script>
     <script src="${uris.mainScript}"></script>
   </body>
 </html>`;

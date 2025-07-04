@@ -2,9 +2,9 @@
 /// Resuelve el nombre lógico de icono y construye URL relativa
 
 import * as vscode from 'vscode';
-import { IconManager } from '../IconManager';
+import { TabIconManager } from '../TabIconManager';
 
-const iconManager = new IconManager();
+const iconManager = new TabIconManager();
 
 
 /// Enum con los nombres de todos los SVG en assets/svg

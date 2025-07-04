@@ -13,15 +13,15 @@ export { ConfigManager, SideTabsConfig } from './config';
 
 // Feature modules exports
 export { Localization } from './localization/Localization';
-export { IconManager } from './services/IconManager';
-export { DiagnosisManager } from './services/DiagnosisManager';
+export { TabIconManager as IconManager } from './services/TabIconManager';
+export { TabDiagnosticsManager as TabDiagnosticsManager } from './services/TabDiagnosticsManager';
 export { TabManager, TabInfo } from './services/TabManager';
-export { CommandManager } from './services/CommandManager';
+export { TabMenuManager as CommandManager } from './services/TabMenuManager';
 export { GUIManager as UIManager } from './services/GUIManager';
 export { EventManager } from './services/EventManager';
 export { TabsProvider } from './providers/TabsProvider';
 
 // Export interfaces and types as needed
 export * from './services/TabManager';
-export * from './services/DiagnosisManager';
+export * from './services/TabDiagnosticsManager';
 export * from './services/GUIManager';
