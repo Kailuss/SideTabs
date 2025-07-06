@@ -1,12 +1,10 @@
-// src/services/gui/IconsTemplate.ts
-// Centralized template for the icon initialization script in the webview
-
 /**
- * Generates the icon initialization script for the webview.
- * @param iconMap - The icon map object
- * @param fileIconMap - The file icon map object
- * @returns The HTML <script> tag as a string
- */
+ * Genera el script de inicialización de iconos para la webview.
+ * @param iconMap - El objeto mapa de iconos
+ * @param fileIconMap - El objeto mapa de iconos de archivos
+ * @returns La etiqueta HTML <script> como cadena
+*/
+// = Plantilla centralizada para el script de inicialización de iconos en la webview =
 export function renderIconInitializationScript(iconMap: Record<string, string>, fileIconMap: Record<string, string>): string {
   return `
     <script>

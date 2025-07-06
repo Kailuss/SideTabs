@@ -1,6 +1,6 @@
-/*/ Estilos para los elementos internos de las pestañas */
+/*=  Estilos para los elementos internos de las pestañas  =*/
 
-/** Contenedor principal para los elementos de la pestaña */
+/** Contenedor principal para los elementos de la pestaña **/
 .tab-content {
 	display: flex;
 	width: 100%;
@@ -8,7 +8,7 @@
 	align-items: center;
 }
 
-/** Contenedor icono - fijo a la izquierda */
+/** Contenedor icono - fijo a la izquierda **/
 .tab-icon-container {
 	position: relative;
 	margin-right: 11px;
@@ -18,13 +18,19 @@
 	flex-shrink: 0;
 }
 
+.tab-icon-container svg {
+	width: 18px;
+	height: 18px;
+	display: block;
+}
+
 .tab-icon-container img {
 	max-width: 100%;
 	max-height: 100%;
 	object-fit: contain;
 }
 
-/** Contenedor nombre, ruta y diagnósticos - central */
+/** Contenedor nombre, ruta y diagnósticos - central **/
 .tab-info-container {
 	flex-grow: 1;
 	flex: 1;
@@ -37,7 +43,7 @@
 	margin-bottom: 2px;
 }
 
-/** Contenedor de acciones a la derecha */
+/** Contenedor de acciones a la derecha **/
 .tab-actions-container {
 	margin-left: 8px;
 	position: absolute;
@@ -48,7 +54,7 @@
 	flex-shrink: 0;
 }
 
-/** Indicador de archivo modificado */
+/** Indicador de archivo modificado **/
 .tab-dirty-indicator {
 	display: flex;
 	cursor: pointer;
@@ -73,7 +79,7 @@
 	display: block;
 }
 
-/** Botón de cerrar pestaña */
+/** Botón de cerrar pestaña **/
 .tab-close-button {
 	display: flex;
 	cursor: pointer;
@@ -111,7 +117,7 @@
 	stroke: var(--vscode-editor-foreground);
 }
 
-/** Nombre del archivo */
+/** Nombre del archivo **/
 .tab-filename {
 	flex: 1;
 	overflow: hidden;
@@ -148,7 +154,7 @@
 	opacity: 1 !important;
 }
 
-/** Ruta del archivo */
+/** Ruta del archivo **/
 .tab-filepath {
 	color: var(--vscode-editorLineNumber-foreground);
 	font-size: var(--subtitle-font-size);
@@ -173,10 +179,7 @@
 	color: var(--vscode-descriptionForeground);
 }
 
-
-
-
-
+/** Evitar selección en componentes de tabs **/
 /* Evitar selección en componentes de tabs */
 .tab-content,
 .tab-info-container,
@@ -192,7 +195,7 @@
 	cursor: pointer;
 }
 
-/* Excepción para el botón de cierre que debería tener un cursor específico */
+/** Excepción para el botón de cierre que debería tener un cursor específico **/
 .tab-close-button {
 	cursor: pointer;
 }

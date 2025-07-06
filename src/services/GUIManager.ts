@@ -9,7 +9,7 @@ import { renderTab, renderDiagnostics } from './templates/TabTemplate';
 import { renderBaseTemplate } from './templates/BaseTemplate';
 import { renderIconInitializationScript } from './templates/IconsTemplate';
 
-//· Extiende la interfaz TabInfo para la GUI
+// = Extiende la interfaz TabInfo para la GUI
 interface GUITabInfo extends TabInfo {
 	resourceUri?: vscode.Uri;
 	label: string;
@@ -18,7 +18,7 @@ interface GUITabInfo extends TabInfo {
 	index: number;
 }
 
-//· Genera el HTML 
+// = Genera el HTML 
 export class GUIManager {
 	private iconManager: TabIconManager;
 	private diagnosticsManager: TabDiagnosticsManager;
@@ -48,13 +48,11 @@ export class GUIManager {
 					tabs: uris.styles.tabs,
 					tabComponents: uris.styles.tabComponents,
 					diagnostics: uris.styles.diagnostics,
-					dragDrop: uris.styles.dragDrop,
 					dragDropAnimation: uris.styles.dragDropAnimation
 				},
 				scripts: {
 					dragDropManager: uris.scripts.dragDropManager,
-					tabDataModel: uris.scripts.tabDataModel,
-					eventsBridge: uris.scripts.eventsBridge
+					tabDataModel: uris.scripts.tabDataModel
 				}
 			},
 			tabsHtml,
@@ -96,13 +94,11 @@ export class GUIManager {
 					tabs: uris.styles.tabs,
 					tabComponents: uris.styles.tabComponents,
 					diagnostics: uris.styles.diagnostics,
-					dragDrop: uris.styles.dragDrop,
 					dragDropAnimation: uris.styles.dragDropAnimation
 				},
 				scripts: {
 					dragDropManager: uris.scripts.dragDropManager,
-					tabDataModel: uris.scripts.tabDataModel,
-					eventsBridge: uris.scripts.eventsBridge
+					tabDataModel: uris.scripts.tabDataModel
 				}
 			},
 			tabsHtml: tabsHTML,
@@ -325,5 +321,10 @@ export class GUIManager {
 			return path.slice(0, lastSlash + 1) + '<br>' + path.slice(lastSlash + 1);
 		}
 		return path;
+	}
+
+	/// Método público para renderizar diagnósticos usando TabTemplate
+	public renderDiagnosticsHtml(diagnostics: { errors: number, warnings: number, infos: number }): string {
+		return renderDiagnostics(diagnostics);
 	}
 }

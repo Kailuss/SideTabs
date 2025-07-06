@@ -1,4 +1,4 @@
-//· Utilidades para la gestión de iconos 
+// = Utilidades para la gestión de iconos 
 /// Resuelve el nombre lógico de icono y construye URL relativa
 
 import * as vscode from 'vscode';

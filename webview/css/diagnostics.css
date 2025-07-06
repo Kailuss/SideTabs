@@ -1,6 +1,4 @@
-/* ===========================================================
-   DIAGNOSTICS - ESTILOS DE DIAGNÓSTICO (migrado de diagnostics-compact.css)
-   =========================================================== */
+/* =DIAGNOSTICS - ESTILOS DE DIAGNÓSTICO= */
 
 .diagnostics-compact {
 	display: inline-flex;
@@ -11,32 +9,34 @@
 }
 
 .diagnostics-count {
-	display: inline-flex;
-	align-items: center;
-	padding: 0 3px;
-	font-weight: 800;
-	color: var(--vscode-editor-background);
-	border-radius: 16%;
-	font-size: 0.64em;
-	padding-bottom: 0.1em;
+	position: relative;
+	top: -0.08em;
+	padding: 0 4px;
+	font-weight: 600;
+	border-radius: 25%;
+	font-size: 0.75em;
+	padding-bottom: 0.082em;
+	max-height: min-content;
+	margin-bottom: 2px;
+	color: white;
 }
 
 .diagnostics-count.error {
-	background-color: var(--vscode-editorError-foreground, #f14c4c);
+	background-color: #f14c4c;
 }
 
 .diagnostics-count.warning {
-	background-color: var(--vscode-editorWarning-foreground, #cca700);
+	background-color: #cca700;
 }
 
 .diagnostics-count.info {
-	background-color: var(--vscode-editorInfo-foreground, #3794ff);
+	background-color: #3794ff;
 }
 
 .diagnostics-sep {
-	margin: 0 2px;
+	margin: 0 4px;
 	color: var(--vscode-editorHint-foreground, #888);
-	font-size: 10px;
+	font-size: 1em;
 }
 
 .diagnostics-svg {
@@ -51,7 +51,7 @@
 	top: -0.13em;
 }
 
-/* Animaciones para nuevos diagnósticos */
+/* =Animaciones para nuevos diagnósticos= */
 .diagnostics-count.new {
 	animation: countAppear 5.3s ease-out;
 }

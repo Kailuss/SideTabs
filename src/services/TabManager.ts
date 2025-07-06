@@ -11,7 +11,7 @@ export interface TabInfo {
 	resourceUri?: vscode.Uri; // URI del recurso asociado a la pestaña
 }
 
-//· Gestiona el orden personalizado y la lógica de las pestañas
+// = Gestiona el orden personalizado y la lógica de las pestañas
 
 export class TabManager {
 	private customOrder: string[] = [];

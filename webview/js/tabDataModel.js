@@ -19,7 +19,7 @@ class TabDataModel {
 		console.log('[TabDataModel] Modelo de datos inicializado');
 	}
 
-	//· Clase interna para representar una pestaña individual
+	// = Clase interna para representar una pestaña individual
 	static TabObject = class {
 		constructor(data = {}) {
 			//* Propiedades esenciales
@@ -470,10 +470,10 @@ const tabDataModel = new TabDataModel();
 
 // Exportar para usar en módulos
 if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
- module.exports = { TabDataModel, tabDataModel };
+module.exports = { TabDataModel, tabDataModel };
 } else {
- window.TabDataModel = TabDataModel;
- window.tabDataModel = tabDataModel;
+window.TabDataModel = TabDataModel;
+window.tabDataModel = tabDataModel;
 }
 
 console.log('[TabDataModel] Modelo de datos global inicializado');

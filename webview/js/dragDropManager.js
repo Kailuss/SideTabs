@@ -309,7 +309,7 @@ window.DragDropManager = {
 	},
 
 	/// Método opcional para animaciones más suaves con interpolación personalizada
-	/// Permite animaciones más complejas como easing personalizado o animaciones por frames
+	//- Permite animaciones más complejas como easing personalizado o animaciones por frames
 	animateTabToTargetWithInterpolation(tabState, tab, options = {}) {
 		const {
 			duration = this.animationDuration,

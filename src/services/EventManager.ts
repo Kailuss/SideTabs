@@ -3,7 +3,7 @@ import { TabManager } from './TabManager';
 import { TabMenuManager } from './TabMenuManager';
 import { TabsProvider } from 'src/providers/TabsProvider';
 
-//· Comandos reconocidos desde el webview
+// = Comandos reconocidos desde el webview
 /// Enumera los comandos que el webview puede enviar a la extensión
 /// para acciones como cerrar pestañas, mover, enfocar, etc.
 enum WebviewCommand {
@@ -15,9 +15,10 @@ enum WebviewCommand {
 	tabMoved = 'tabMoved',
 	showContextMenu = 'showContextMenu',
 	focus = 'focus',
+	requestTabsUpdate = 'requestTabsUpdate',
 }
 
-//· EventManager: Gestiona todos los eventos y mensajes entre el webview y la extensión.
+// = EventManager: Gestiona todos los eventos y mensajes entre el webview y la extensión.
 // - Escucha mensajes del webview (clics, cierre, drag & drop, menú contextual, etc.)
 // - Llama a los métodos apropiados del TabManager y CommandManager
 // - Actualiza la UI y sincroniza el estado tras cada acción
@@ -55,15 +56,6 @@ export class EventManager {
 				if (e.affectsConfiguration('sidetabs')) onTabsChanged(false);
 			}),
 
-			// Listener: Cambios en las tabs (abrir, cerrar, mover, etc) desde VS Code
-			// Este evento se dispara cuando el usuario interactúa con las tabs nativas de VS Code,
-			// por ejemplo, abre, cierra o mueve una pestaña en la barra superior estándar.
-			// No captura acciones realizadas desde el webview de la extensión, solo desde la UI principal de VS Code.
-			vscode.window.tabGroups.onDidChangeTabs((e) => {
-				console.log(`[SideTabs] EventManager: Cambio en tabs detectado: ${e.changed.length} cambiados, ${e.closed.length} cerrados, ${e.opened.length} abiertos`);
-				onTabsChanged(true);
-			}),
-
 			// Listener: Cambios en los grupos de tabs (por ejemplo, se crea o elimina un grupo)
 			vscode.window.tabGroups.onDidChangeTabGroups(() => {
 				console.log(`[SideTabs] EventManager: Cambio en grupos de tabs detectado`);
@@ -77,7 +69,7 @@ export class EventManager {
 			}),
 
 			// Listener: Cambio de editor de texto activo (duplicado, pero con delay para asegurar actualización)
-			vscode.window.onDidChangeActiveTextEditor(() => {
+			vscode.window.tabGroups.onDidChangeTabs(() => {
 				console.log(`[SideTabs] EventManager: Cambio de editor de texto activo detectado`);
 				setTimeout(() => onTabsChanged(true), 50); // Pequeño retraso para asegurar que VS Code actualice el estado
 			}),
@@ -110,10 +102,6 @@ export class EventManager {
 				if (message.command === WebviewCommand.viewReady) {
 					console.log('[SideTabs] EventManager: Vista lista. Estilos cargados:', message.stylesLoaded);
 					return;
-				}
-				if (message.command === 'tabClicked') {
-					vscode.workspace.openTextDocument({ content: '', language: 'plaintext' })
-						.then(doc => vscode.window.showTextDocument(doc));
 				}
 				// Procesa el mensaje recibido y ejecuta la acción correspondiente
 				await this.handleWebviewMessage(message, async (forceFullUpdate?: boolean) => {
@@ -163,6 +151,10 @@ export class EventManager {
 				break;
 			case WebviewCommand.focus:
 				await this.handleTabFocus(message);
+				break;
+			case WebviewCommand.requestTabsUpdate:
+				console.log('[SideTabs] EventManager: Solicitud de actualización de pestañas recibida, motivo:', message.reason);
+				await updateCallback();
 				break;
 			default:
 				// Fallback: buscar por uniqueId o label si el comando no es reconocido
@@ -329,7 +321,7 @@ export class EventManager {
 					viewColumn: group.viewColumn,
 					selection: undefined
 				};
-				await vscode.window.showTextDocument(tab.input.uri, options);
+				await vscode.window.showTextDocument(tab.input.uri, options); // Asegura que el documento se abra en el grupo correcto
 			}
 		} catch (error) {
 			console.error('[SideTabs] EventManager: Error al enfocar pestaña:', error);

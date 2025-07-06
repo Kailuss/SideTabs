@@ -1,4 +1,4 @@
-//· El backend solo maneja datos y lógica de mapeo, nunca rutas absolutas ni HTML. 
+// = El backend solo maneja datos y lógica de mapeo, nunca rutas absolutas ni HTML. 
 /// Construir y exponer el iconMap (solo datos, no rutas)
 
 import * as vscode from 'vscode';

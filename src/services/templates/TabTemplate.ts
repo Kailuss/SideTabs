@@ -2,7 +2,7 @@
 // Example if 'iconsUtils' is in 'src/services/utils/iconsUtils.ts':
 import iconUtils from '../utils/iconsUtils';
 
-//· Plantillas centralizadas para la generación de HTML de pestañas, diagnósticos e iconos en SideTabs
+// = Plantillas centralizadas para la generación de HTML de pestañas, diagnósticos e iconos en SideTabs = 
 
 export interface RenderTabOptions {
 	uniqueId: string;
@@ -24,7 +24,7 @@ export async function initDiagnosticsIcons(context: any, webview: any) {
 	infoIcon = await iconUtils.getIconUrlForFile(undefined, 'info', context, webview);
 }
 
-//· Genera el HTML para una pestaña con icono, nombre, ruta y diagnóstico 
+// = Genera el HTML para una pestaña con icono, nombre, ruta y diagnóstico = 
 export function renderTab({ uniqueId, iconPath, label, directory, isActive, isDirty, diagnostics, diagnosticsLevel }: RenderTabOptions & { diagnostics?: { errors: number, warnings: number, infos: number }, diagnosticsLevel?: 'error' | 'warning' | 'info' }): string {
 	const filenameClass = diagnosticsLevel ? `tab-filename ${diagnosticsLevel}` : 'tab-filename';
 
@@ -34,7 +34,7 @@ export function renderTab({ uniqueId, iconPath, label, directory, isActive, isDi
 		return `<span class="diagnostics-count ${type}" title="${count} ${type === 'error' ? 'errores' : type === 'warning' ? 'advertencias' : 'info'}">${count}</span>`;
 	};
 
-	// Diagnóstico compacto: N · W · I
+	// Diagnóstico compacto: E · W · I
 	let diagnosticsCompact = '';
 	if (diagnostics) {
 		const parts = [];
@@ -43,7 +43,7 @@ export function renderTab({ uniqueId, iconPath, label, directory, isActive, isDi
 		if (diagnostics.infos > 0) parts.push(getInlineDiagnosticsCount(diagnostics.infos, 'info'));
 
 		if (parts.length > 0) {
-			diagnosticsCompact = `<span class="diagnostics-count">${parts.join('<span class="diagnostics-sep">►</span>')}</span>`;
+			diagnosticsCompact = `<span class="diagnostics-count">${parts.join('<span class="diagnostics-sep">•</span>')}</span>`;
 		}
 	}
 
@@ -66,7 +66,7 @@ export function renderTab({ uniqueId, iconPath, label, directory, isActive, isDi
   `;
 }
 
-//· Configura las opciones para renderizar diagnósticos de archivos 
+// = Configura las opciones para renderizar diagnósticos de archivos = 
 export interface RenderDiagnosticsOptions {
 	errors: number;
 	warnings: number;
@@ -76,7 +76,7 @@ export interface RenderDiagnosticsOptions {
 	infoIcon?: string;
 }
 
-//· Genera el HTML para un icono de archivo 
+// = Genera el HTML para un icono de archivo = 
 export function renderIcon(iconPath: string, alt: string = '', className: string = 'file-icon'): string {
 	return `<img src="${iconPath}" class="${className}" alt="${alt}" />`;
 }

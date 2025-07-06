@@ -10,13 +10,11 @@ interface WebviewBaseTemplateParams {
       tabs: string;
       tabComponents: string;
       diagnostics: string;
-      dragDrop: string;
       dragDropAnimation: string;
     };
     scripts: {
       dragDropManager: string;
       tabDataModel: string;
-      eventsBridge: string;
     };
   };
   tabsHtml: string;
@@ -43,7 +41,6 @@ export function renderBaseTemplate(params: WebviewBaseTemplateParams): string {
     <link href="${uris.styles.tabs}" rel="stylesheet" />
     <link href="${uris.styles.tabComponents}" rel="stylesheet" />
     <link href="${uris.styles.diagnostics}" rel="stylesheet" />
-    <link href="${uris.styles.dragDrop}" rel="stylesheet" />
     <link href="${uris.styles.dragDropAnimation}" rel="stylesheet" />
     <style>
       :root {
@@ -69,7 +66,6 @@ export function renderBaseTemplate(params: WebviewBaseTemplateParams): string {
       ${tabsHtml}
     </div>
     <script src="${uris.scripts.tabDataModel}"></script>
-    <script src="${uris.scripts.eventsBridge}"></script>
     <script src="${uris.scripts.dragDropManager}"></script>
     <script src="${uris.mainScript}"></script>
   </body>

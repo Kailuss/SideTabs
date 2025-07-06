@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Localization } from '../localization/Localization';
 
-//· Gestiona los comandos y menús contextuales de las pestañas 
+// = Gestiona los comandos y menús contextuales de las pestañas = 
 export class TabMenuManager {
 
 	/// Establece la referencia al proveedor
@@ -148,5 +148,4 @@ export class TabMenuManager {
 			vscode.window.showInformationMessage(localize('pathCopied'));
 		}
 	}
-
 }

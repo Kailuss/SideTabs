@@ -41,11 +41,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function initializeIconsInBackground(provider: TabsProvider): Promise<void> {
 	try {
-		// Call the correct method with false to avoid forcing a refresh
+		//* Llama al método de precarga de iconos
 		await provider.preloadIconsInBackground(false);
 		console.log('[SideTabs] Iconos inicializados correctamente');
 	} catch (error) {
-		// Ignorar errores en la precarga, no son críticos
+		//* Ignorar errores en la precarga, no son críticos
 		console.warn('[SideTabs] Error al precargar iconos:', error);
 	}
 }
@@ -53,5 +53,5 @@ async function initializeIconsInBackground(provider: TabsProvider): Promise<void
 /// Función de desactivación de la extensión
 
 export function deactivate() {
-	// Cleanup si es necesario
+	//* Cleanup no es necesario
 }
