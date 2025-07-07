@@ -43,7 +43,7 @@ export function renderTab({ uniqueId, iconPath, label, directory, isActive, isDi
 		if (diagnostics.infos > 0) parts.push(getInlineDiagnosticsCount(diagnostics.infos, 'info'));
 
 		if (parts.length > 0) {
-			diagnosticsCompact = `<span class="diagnostics-count">${parts.join('<span class="diagnostics-sep">•</span>')}</span>`;
+			diagnosticsCompact = `<span class="diagnostics-count">${parts.join('')}</span>`;
 		}
 	}
 

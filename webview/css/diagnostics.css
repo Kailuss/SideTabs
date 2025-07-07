@@ -1,54 +1,41 @@
 /* =DIAGNOSTICS - ESTILOS DE DIAGNÓSTICO= */
 
-.diagnostics-compact {
-	display: inline-flex;
-	align-items: center;
-	margin-left: 4px;
-	font-size: 12px;
-	gap: 2px;
-}
-
 .diagnostics-count {
 	position: relative;
 	top: -0.08em;
-	padding: 0 4px;
-	font-weight: 600;
-	border-radius: 25%;
-	font-size: 0.75em;
-	padding-bottom: 0.082em;
 	max-height: min-content;
+	padding: 0px 0.50em 0.15em 0.5em;
 	margin-bottom: 2px;
-	color: white;
+	margin-right: 0.64em;
+	border-radius: 1em;
+	font-size: 0.80em;
+	font-weight: 650;
 }
 
 .diagnostics-count.error {
-	background-color: #f14c4c;
+	border-color: #ff6666;
+	color: #ff6666;
+	border-style: solid;
+	border-width: 1.5px;
 }
 
 .diagnostics-count.warning {
-	background-color: #cca700;
+	color: #cca700;
+	border-color: #cca700;
+	border-style: solid;
+	border-width: 1.5px;
 }
 
 .diagnostics-count.info {
-	background-color: #3794ff;
-}
-
-.diagnostics-sep {
-	margin: 0 4px;
-	color: var(--vscode-editorHint-foreground, #888);
-	font-size: 1em;
+	color: #3794ff;
+	border-color: #3794ff;
+	border-style: solid;
+	border-width: 1.5px;
 }
 
 .diagnostics-svg {
 	vertical-align: middle;
 	margin-right: 2px;
-}
-
-.diagnostics-sep {
-	color: var(--vscode-editorLineNumber-foreground);
-	font-size: var(--subtitle-font-size) !important;
-	position: relative;
-	top: -0.13em;
 }
 
 /* =Animaciones para nuevos diagnósticos= */
